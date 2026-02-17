@@ -2,10 +2,14 @@
 -- Record movement + animations, playback with loop
 -- ==========================================================================
 
+print("🚀 Script starting...")
+
 local Player = game.Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+
+print("✅ Services loaded")
 
 -- ================= STORAGE =================
 local recordings = {}
@@ -266,16 +270,22 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoWalkSimple"
 screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Wait for PlayerGui to be ready
+repeat task.wait() until PlayerGui
 screenGui.Parent = PlayerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 250, 0, 350)
-mainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+mainFrame.Position = UDim2.new(0, 20, 0, 100)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 mainFrame.BackgroundTransparency = 0.1
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
+mainFrame.ZIndex = 10
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
@@ -459,8 +469,13 @@ end)
 print("=== AUTO WALK RECORDER (SIMPLE) ===")
 print("✅ Recording with animations")
 print("✅ Playback with loop")
+print("✅ UI Created")
 print("====================================")
 
+-- Wait a bit before loading
+task.wait(0.5)
 loadRecordings()
 refreshList()
 updateStatus()
+
+print("✅ System ready!")
