@@ -216,7 +216,6 @@ function Playback:start()
 	self.heightOffset = self.currentHipHeight - self.recordedHipHeight
 	
 	print("🎬 Playback started, frames: " .. #self.recording.frames)
-	print("🎭 Animation: " .. selectedAnimPackage)
 	print("📏 Height offset: " .. self.heightOffset)
 	print("⏱️ Start time: " .. self.start_time)
 	
