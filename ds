@@ -26,6 +26,9 @@ print("DEBUG: screenSize.X = " .. screenSize.X .. ", isMobile = " .. tostring(is
 -- ================= VARIABEL RECORDER =================
 local loopEnabled = false
 
+-- Forward declarations
+local refreshPlaybackList
+
 -- ================= AUTO WALK STORAGE =================
 local function serializeCFrame(cf)
 	local p = cf.Position
@@ -1793,7 +1796,7 @@ end)
 end
 
 -- ================= REFRESH PLAYBACK LIST =================
-function refreshPlaybackList()
+refreshPlaybackList = function()
 	print("🔄 Refreshing playback list...")
 	
 	for _, child in ipairs(playScroll:GetChildren()) do
