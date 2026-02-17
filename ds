@@ -1,0 +1,2238 @@
+--[[ -- ====================== FEDLY SCRIPT HUB + AUTO WALK SYSTEM ======================
+-- ✓ Key Verification
+-- ✓ List Mount (Save to single file)
+-- ✓ Auto Walk Recorder
+-- ✓ Auto Walk Playback with animations
+-- ✓ Loop feature
+-- ✓ Height adjustment
+-- =====================================================================================
+
+local Player = game.Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- ================= KONFIGURASI =================
+local DISCORD_LINK = "https://discord.com/invite/KWRuqUxt"
+local API_URL = "https://roblox.ikhsanfedly13.workers.dev"
+local BETATES_URL = "https://betates.ikhsanfedly13.workers.dev"
+local MOUNTS_FILE = "saved_mounts.txt"
+
+-- ================= VARIABEL =================
+local heartbeatThread = nil
+local currentKey = ""
+local currentUserId = ""
+local isVerified = false
+
+-- Detect screen size
+local screenSize = workspace.CurrentCamera.ViewportSize
+local isMobile = screenSize.X < 1000
+print("DEBUG: screenSize.X = " .. screenSize.X .. ", isMobile = " .. tostring(isMobile))
+
+-- ================= ANIMATION PACKAGES =================
+local AnimationPackages = {
+	["Adidas"] = {
+		run = 82598234841035,
+		walk = 122150855457006,
+		jump = 75290611992385,
+		fall = 98600215928904,
+		idle = 122257458498464
+	},
+	["Wicked Popular"] = {
+		run = 72301599441680,
+		walk = 18537392113,
+		jump = 104325245285198,
+		fall = 121152442762481,
+		idle = 10921054344
+	},
+	["Default"] = {
+		run = 913376220,
+		walk = 913402848,
+		jump = 125750702,
+		fall = 180436148,
+		idle = 507766666
+	},
+	["Ninja"] = {
+		run = 656118852,
+		walk = 656121766,
+		jump = 656117878,
+		fall = 656115606,
+		idle = 656117400
+	},
+	["Superhero"] = {
+		run = 616163682,
+		walk = 616168032,
+		jump = 616161997,
+		fall = 616157476,
+		idle = 616158929
+	},
+	["Knight"] = {
+		run = 657564596,
+		walk = 657552124,
+		jump = 658409194,
+		fall = 658161206,
+		idle = 657595757
+	},
+	["Levitation"] = {
+		run = 616006778,
+		walk = 616013216,
+		jump = 616008936,
+		fall = 616005863,
+		idle = 616006778
+	},
+	["Astronaut"] = {
+		run = 891621366,
+		walk = 891636393,
+		jump = 891627522,
+		fall = 891617961,
+		idle = 891621366
+	},
+	["Bubbly"] = {
+		run = 910025107,
+		walk = 910034870,
+		jump = 910016857,
+		fall = 910009327,
+		idle = 910004836
+	},
+	["Vampire"] = {
+		run = 1083462077,
+		walk = 1083473930,
+		jump = 1083455352,
+		fall = 1083443587,
+		idle = 1083445855
+	},
+	["Werewolf"] = {
+		run = 1083216690,
+		walk = 1083178339,
+		jump = 1083218792,
+		fall = 1083214717,
+		idle = 1083195517
+	},
+	["Robot"] = {
+		run = 616091570,
+		walk = 616095330,
+		jump = 616090535,
+		fall = 616089559,
+		idle = 616088211
+	},
+	["Toy"] = {
+		run = 782842708,
+		walk = 782843345,
+		jump = 782847020,
+		fall = 782846423,
+		idle = 782841498
+	},
+	["Pirate"] = {
+		run = 750783738,
+		walk = 750785693,
+		jump = 750782230,
+		fall = 750780242,
+		idle = 750781874
+	},
+	["Elder"] = {
+		run = 845403856,
+		walk = 845386501,
+		jump = 845398858,
+		fall = 845397899,
+		idle = 845397899
+	},
+	["Cartoony"] = {
+		run = 742638842,
+		walk = 742640026,
+		jump = 742637942,
+		fall = 742637151,
+		idle = 742637544
+	},
+	["Stylish"] = {
+		run = 616140816,
+		walk = 616146177,
+		jump = 616139451,
+		fall = 616134815,
+		idle = 616136790
+	},
+	["Oldschool"] = {
+		run = 5918726674,
+		walk = 5918726674,
+		jump = 5918728267,
+		fall = 5918729674,
+		idle = 5918731260
+	}
+}
+
+local selectedAnimPackage = "Adidas"
+local loopEnabled = false
+
+-- ================= FUNGSI HELPER =================
+local function urlEncode(str)
+    if not str then return "" end
+    str = string.gsub(tostring(str), "\n", "\r\n")
+    str = string.gsub(str, "([^%w %-%_%.%~])", function(c)
+        return string.format("%%%02X", string.byte(c))
+    end)
+    str = string.gsub(str, " ", "%%20")
+    return str
+end
+
+local function httpGetRequest(url)
+    local success, result = pcall(function()
+        return game:HttpGet(url, true)
+    end)
+    if success then
+        return result
+    else
+        warn("HttpGet failed:", result)
+        return nil
+    end
+end
+
+-- ================= FUNGSI HEARTBEAT =================
+local function startHeartbeat(key, userId)
+    if heartbeatThread then
+        task.cancel(heartbeatThread)
+        heartbeatThread = nil
+    end
+    print("⚡ Starting heartbeat system...")
+    heartbeatThread = task.spawn(function()
+        local heartbeatCount = 0
+        while true do
+            task.wait(25)
+            heartbeatCount = heartbeatCount + 1
+            local random = math.random(100000, 999999)
+            local url = API_URL .. "/v1/heartbeat?key=" .. urlEncode(key) .. "&userid=" .. urlEncode(userId) .. "&action=heartbeat&_r=" .. random
+            local response = httpGetRequest(url)
+            if response then
+                local success, data = pcall(function()
+                    return HttpService:JSONDecode(response)
+                end)
+                if success and data.success then
+                    print("✅ Heartbeat #" .. heartbeatCount .. " OK")
+                end
+            end
+        end
+    end)
+end
+
+-- ================= MOUNT STORAGE (SINGLE FILE) =================
+local savedMounts = {}
+
+local function saveAllMountsToFile()
+	local lines = {}
+	for name, content in pairs(savedMounts) do
+		table.insert(lines, name .. "##MOUNT##" .. content)
+	end
+	
+	local success = pcall(function()
+		writefile(MOUNTS_FILE, table.concat(lines, "\n"))
+	end)
+	
+	if success then
+		print("✅ Saved " .. #lines .. " mount(s) to file")
+	else
+		warn("❌ Failed to save mounts")
+	end
+	
+	return success
+end
+
+local function loadAllMountsFromFile()
+	local loaded = 0
+	
+	if not readfile or not isfile then
+		warn("⚠️ File functions not available")
+		return 0
+	end
+	
+	if not isfile(MOUNTS_FILE) then
+		print("📭 No saved mounts")
+		return 0
+	end
+	
+	print("🔍 Loading mounts from: " .. MOUNTS_FILE)
+	
+	local success, fileData = pcall(function()
+		return readfile(MOUNTS_FILE)
+	end)
+	
+	if not success or not fileData or #fileData == 0 then
+		warn("❌ Failed to read mounts file")
+		return 0
+	end
+	
+	local lines = string.split(fileData, "\n")
+	
+	for _, line in ipairs(lines) do
+		if line and #line > 0 then
+			local sepPos = line:find("##MOUNT##")
+			if sepPos then
+				local name = line:sub(1, sepPos - 1)
+				local content = line:sub(sepPos + 9)
+				
+				if name and content and #name > 0 and #content > 0 then
+					savedMounts[name] = content
+					loaded = loaded + 1
+					print("✅ Loaded mount: " .. name)
+				end
+			end
+		end
+	end
+	
+	print("✅ Total mounts loaded: " .. loaded)
+	return loaded
+end
+
+local function saveMountToStorage(name, content)
+	savedMounts[name] = content
+	saveAllMountsToFile()
+	return true
+end
+
+-- ================= AUTO WALK STORAGE =================
+local function serializeCFrame(cf)
+	local p = cf.Position
+	local rx, ry, rz = cf:ToOrientation()
+	return string.format("%.2f,%.2f,%.2f,%.4f,%.4f,%.4f", p.X, p.Y, p.Z, rx, ry, rz)
+end
+
+local function parseCFrame(str)
+	local parts = string.split(str, ",")
+	local pos = Vector3.new(tonumber(parts[1]), tonumber(parts[2]), tonumber(parts[3]))
+	return CFrame.new(pos) * CFrame.fromOrientation(tonumber(parts[4]), tonumber(parts[5]), tonumber(parts[6]))
+end
+
+local function serialize(name, frames, hipHeight)
+	local parts = {name, tostring(hipHeight or 0)}
+	for _, frame in ipairs(frames) do
+		table.insert(parts, serializeCFrame(frame.cframe) .. ";" .. tostring(frame.timestamp))
+	end
+	return table.concat(parts, "|")
+end
+
+local function deserialize(data)
+	local parts = string.split(data, "|")
+	local hipHeight = tonumber(parts[2]) or 0
+	local frames = {}
+	for i = 3, #parts do
+		pcall(function()
+			local frameData = string.split(parts[i], ";")
+			local timestamp = tonumber(frameData[2]) or ((i - 3) * 0.1)
+			table.insert(frames, {
+				cframe = parseCFrame(frameData[1]),
+				timestamp = timestamp
+			})
+		end)
+	end
+	return {name = parts[1], frames = frames, frameCount = #frames, hipHeight = hipHeight}
+end
+
+-- ================= RECORDER =================
+local Recorder = {}
+Recorder.__index = Recorder
+
+function Recorder.new(char)
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local humanoid = char:FindFirstChild("Humanoid")
+	
+	return setmetatable({
+		char = char,
+		root = hrp,
+		humanoid = humanoid,
+		hipHeight = humanoid and humanoid.HipHeight or 0,
+		active = false,
+		frames = {},
+		start_time = 0,
+		conn = nil
+	}, Recorder)
+end
+
+function Recorder:start()
+	self.active = true
+	self.frames = {}
+	self.start_time = tick()
+	self.last_record = 0
+	
+	local SAMPLE_INTERVAL = 0.1
+	
+	self.conn = RunService.Heartbeat:Connect(function()
+		if self.root then
+			local now = tick()
+			local elapsed = now - self.start_time
+			
+			if elapsed - self.last_record >= SAMPLE_INTERVAL then
+				table.insert(self.frames, {
+					cframe = self.root.CFrame,
+					timestamp = elapsed
+				})
+				self.last_record = elapsed
+			end
+		end
+	end)
+end
+
+function Recorder:stop()
+	self.active = false
+	if self.conn then self.conn:Disconnect() end
+	local f = self.frames
+	local h = self.hipHeight
+	self.frames = {}
+	return f, h
+end
+
+-- ================= PLAYBACK =================
+local Playback = {}
+Playback.__index = Playback
+
+function Playback.new(char, recording)
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local humanoid = char:FindFirstChild("Humanoid")
+	
+	return setmetatable({
+		char = char,
+		root = hrp,
+		humanoid = humanoid,
+		recording = recording,
+		recordedHipHeight = recording.hipHeight or 0,
+		currentHipHeight = humanoid and humanoid.HipHeight or 0,
+		heightOffset = 0,
+		active = false,
+		index = 1,
+		start_time = 0,
+		conn = nil
+	}, Playback)
+end
+
+function Playback:start()
+	print("========================================")
+	print("🎬 Playback:start() called")
+	print("========================================")
+	
+	if not self.root then
+		warn("❌ CRITICAL ERROR: self.root is nil!")
+		warn("❌ Cannot start playback without HumanoidRootPart")
+		return
+	end
+	print("✅ Root exists: " .. tostring(self.root))
+	
+	if not self.recording then
+		warn("❌ CRITICAL ERROR: self.recording is nil!")
+		return
+	end
+	print("✅ Recording exists")
+	
+	if not self.recording.frames then
+		warn("❌ CRITICAL ERROR: self.recording.frames is nil!")
+		return
+	end
+	print("✅ Recording frames exist: " .. #self.recording.frames)
+	
+	if #self.recording.frames == 0 then
+		warn("❌ ERROR: Recording has 0 frames!")
+		return
+	end
+	
+	self.active = true
+	self.index = 1
+	self.start_time = tick()
+	
+	self.heightOffset = self.currentHipHeight - self.recordedHipHeight
+	
+	print("🎬 Playback started, frames: " .. #self.recording.frames)
+	print("🎭 Animation: " .. selectedAnimPackage)
+	print("📏 Height offset: " .. self.heightOffset)
+	print("⏱️ Start time: " .. self.start_time)
+	
+	local humanoid = self.char:FindFirstChild("Humanoid")
+	
+	self.originalWalkSpeed = humanoid and humanoid.WalkSpeed or 16
+	self.originalJumpPower = humanoid and humanoid.JumpPower or 50
+	
+	if self.runAnim then 
+		pcall(function() self.runAnim:Stop() end)
+		pcall(function() self.runAnim:Destroy() end)
+	end
+	if self.jumpAnim then 
+		pcall(function() self.jumpAnim:Stop() end)
+		pcall(function() self.jumpAnim:Destroy() end)
+	end
+	if self.fallAnim then 
+		pcall(function() self.fallAnim:Stop() end)
+		pcall(function() self.fallAnim:Destroy() end)
+	end
+	if self.idleAnim then 
+		pcall(function() self.idleAnim:Stop() end)
+		pcall(function() self.idleAnim:Destroy() end)
+	end
+	
+	self.runAnim = nil
+	self.jumpAnim = nil
+	self.fallAnim = nil
+	self.idleAnim = nil
+	
+	if humanoid then
+		local package = AnimationPackages[selectedAnimPackage]
+		
+		pcall(function()
+			local runAnimObj = Instance.new("Animation")
+			runAnimObj.AnimationId = "rbxassetid://" .. tostring(package.run)
+			
+			local jumpAnimObj = Instance.new("Animation")
+			jumpAnimObj.AnimationId = "rbxassetid://" .. tostring(package.jump)
+			
+			local fallAnimObj = Instance.new("Animation")
+			fallAnimObj.AnimationId = "rbxassetid://" .. tostring(package.fall)
+			
+			local idleAnimObj = Instance.new("Animation")
+			idleAnimObj.AnimationId = "rbxassetid://" .. tostring(package.idle)
+			
+			self.runAnim = humanoid:LoadAnimation(runAnimObj)
+			self.jumpAnim = humanoid:LoadAnimation(jumpAnimObj)
+			self.fallAnim = humanoid:LoadAnimation(fallAnimObj)
+			self.idleAnim = humanoid:LoadAnimation(idleAnimObj)
+			
+			print("✅ Loaded animations")
+		end)
+	end
+	
+	if humanoid then
+		humanoid.WalkSpeed = 0
+		humanoid.AutoRotate = false
+		humanoid.PlatformStand = true
+	end
+	
+	if self.root then
+		self.root.Anchored = true
+	end
+	
+	local currentAnim = nil
+	local lastY = self.root.Position.Y
+	local heartbeatCount = 0
+	
+	print("🔄 Setting up Heartbeat connection...")
+	
+	self.conn = RunService.Heartbeat:Connect(function(dt)
+		heartbeatCount = heartbeatCount + 1
+		
+		-- Debug every 30 frames (about 0.5 seconds)
+		if heartbeatCount % 30 == 1 then
+			print("💓 Heartbeat #" .. heartbeatCount .. " - Index: " .. self.index .. "/" .. #self.recording.frames)
+		end
+		
+		if not self.active then 
+			print("⏹️ Playback not active, stopping heartbeat")
+			return 
+		end
+		
+		if not self.root or not self.root.Parent then
+			warn("❌ Root lost, stopping playback")
+			self:stop()
+			return
+		end
+		
+		local elapsed = tick() - self.start_time
+		local frames = self.recording.frames
+		
+		if self.index > #frames then
+			self:stop()
+			return
+		end
+		
+		if self.index < #frames then
+			local nextFrame = frames[self.index + 1]
+			if nextFrame and elapsed >= nextFrame.timestamp then
+				self.index = self.index + 1
+			end
+		end
+		
+		if self.index >= #frames then
+			self.root.CFrame = frames[#frames].cframe
+			if loopEnabled then
+				self:restart()
+				return
+			else
+				self:stop()
+				return
+			end
+		end
+		
+		local curr = frames[self.index]
+		local next = frames[self.index + 1]
+		
+		if not curr or not next then
+			self:stop()
+			return
+		end
+		
+		local duration = next.timestamp - curr.timestamp
+		
+		if duration > 0 then
+			local progress = elapsed - curr.timestamp
+			local alpha = math.clamp(progress / duration, 0, 1)
+			
+			local targetCFrame = curr.cframe:Lerp(next.cframe, alpha)
+			local adjustedCFrame = targetCFrame + Vector3.new(0, self.heightOffset, 0)
+			self.root.CFrame = adjustedCFrame
+			
+			local deltaPos = next.cframe.Position - curr.cframe.Position
+			local horizontalDelta = Vector3.new(deltaPos.X, 0, deltaPos.Z)
+			local horizontalSpeed = horizontalDelta.Magnitude / duration
+			local verticalSpeed = deltaPos.Y / duration
+			
+			local currentY = adjustedCFrame.Position.Y
+			local deltaY = currentY - lastY
+			
+			if self.runAnim and self.jumpAnim and self.fallAnim then
+				if verticalSpeed > 2 or deltaY > 0.5 then
+					if currentAnim ~= "jump" then
+						if self.runAnim then self.runAnim:Stop() end
+						if self.fallAnim then self.fallAnim:Stop() end
+						if self.idleAnim then self.idleAnim:Stop() end
+						self.jumpAnim:Play()
+						currentAnim = "jump"
+					end
+				elseif verticalSpeed < -2 or deltaY < -0.5 then
+					if currentAnim ~= "fall" then
+						if self.runAnim then self.runAnim:Stop() end
+						if self.jumpAnim then self.jumpAnim:Stop() end
+						if self.idleAnim then self.idleAnim:Stop() end
+						self.fallAnim:Play()
+						currentAnim = "fall"
+					end
+				elseif horizontalSpeed > 0.5 then
+					if currentAnim ~= "run" then
+						if self.jumpAnim then self.jumpAnim:Stop() end
+						if self.fallAnim then self.fallAnim:Stop() end
+						if self.idleAnim then self.idleAnim:Stop() end
+						self.runAnim:Play()
+						currentAnim = "run"
+					end
+				else
+					if currentAnim ~= "idle" then
+						if self.runAnim then self.runAnim:Stop() end
+						if self.jumpAnim then self.jumpAnim:Stop() end
+						if self.fallAnim then self.fallAnim:Stop() end
+						if self.idleAnim then 
+							self.idleAnim:Play()
+						end
+						currentAnim = "idle"
+					end
+				end
+			end
+			
+			lastY = currentY
+		else
+			self.root.CFrame = curr.cframe
+		end
+	end)
+	
+	print("✅ Heartbeat connection established!")
+	print("✅ Playback:start() completed successfully")
+	print("========================================")
+end
+
+function Playback:stop()
+	self.active = false
+	
+	if self.conn then 
+		self.conn:Disconnect()
+		self.conn = nil
+	end
+	
+	if self.runAnim then 
+		pcall(function() self.runAnim:Stop() end)
+		pcall(function() self.runAnim:Destroy() end)
+		self.runAnim = nil
+	end
+	if self.jumpAnim then 
+		pcall(function() self.jumpAnim:Stop() end)
+		pcall(function() self.jumpAnim:Destroy() end)
+		self.jumpAnim = nil
+	end
+	if self.fallAnim then 
+		pcall(function() self.fallAnim:Stop() end)
+		pcall(function() self.fallAnim:Destroy() end)
+		self.fallAnim = nil
+	end
+	if self.idleAnim then 
+		pcall(function() self.idleAnim:Stop() end)
+		pcall(function() self.idleAnim:Destroy() end)
+		self.idleAnim = nil
+	end
+	
+	if self.char and self.char:FindFirstChild("Humanoid") then
+		local humanoid = self.char.Humanoid
+		humanoid.WalkSpeed = self.originalWalkSpeed or 16
+		humanoid.JumpPower = self.originalJumpPower or 50
+		humanoid.AutoRotate = true
+		humanoid.PlatformStand = false
+	end
+	
+	if self.root then
+		self.root.Anchored = false
+		self.root.AssemblyLinearVelocity = Vector3.zero
+		self.root.AssemblyAngularVelocity = Vector3.zero
+	end
+	
+	print("⏹️ Playback stopped")
+end
+
+function Playback:restart()
+	self.index = 1
+	self.start_time = tick()
+	print("🔄 Playback restarted")
+end
+
+-- ================= SYSTEM =================
+local System = {}
+System.__index = System
+
+function System.new()
+	return setmetatable({
+		state = "idle",
+		recorder = nil,
+		playback = nil
+	}, System)
+end
+
+function System:startRecording(char)
+	self:forceStop()
+	self.recorder = Recorder.new(char)
+	self.recorder:start()
+	self.state = "recording"
+end
+
+function System:stopRecording()
+	if not self.recorder then return nil, nil end
+	local frames, hipHeight = self.recorder:stop()
+	self.recorder = nil
+	self.state = "idle"
+	return frames, hipHeight
+end
+
+function System:startPlayback(char, recording)
+	print("🎮 System:startPlayback called")
+	print("   - Character: " .. tostring(char))
+	print("   - Recording frames: " .. (recording and #recording.frames or "nil"))
+	
+	self:forceStop()
+	print("✅ Force stopped previous playback/recording")
+	
+	self.playback = Playback.new(char, recording)
+	print("✅ Playback object created")
+	
+	if not self.playback then
+		warn("❌ ERROR: Failed to create playback object!")
+		return
+	end
+	
+	if not self.playback.root then
+		warn("❌ ERROR: Playback root (HumanoidRootPart) is nil!")
+		return
+	end
+	
+	print("🎬 Calling playback:start()...")
+	self.playback:start()
+	self.state = "playing"
+	print("✅ System state changed to: playing")
+end
+
+function System:forceStop()
+	if self.recorder then
+		self.recorder:stop()
+		self.recorder = nil
+	end
+	if self.playback then
+		self.playback:stop()
+		self.playback = nil
+	end
+	self.state = "idle"
+end
+
+-- ================= INITIALIZE SYSTEM EARLY =================
+local system = System.new()
+local recordedFrames = nil
+print("✅ System initialized early")
+
+-- ================= AUTO WALK RECORDING MANAGER =================
+local recordings = {}
+local STORAGE_FILE = "autowalk_recordings.txt"
+
+local function saveAllRecordingsToFile()
+	local lines = {}
+	for name, data in pairs(recordings) do
+		table.insert(lines, name .. "##" .. data)
+	end
+	
+	local success = pcall(function()
+		writefile(STORAGE_FILE, table.concat(lines, "\n"))
+	end)
+	
+	if success then
+		print("✅ Saved " .. #lines .. " recording(s)")
+	else
+		warn("❌ Failed to save recordings")
+	end
+	
+	return success
+end
+
+local function loadAllRecordingsFromFile()
+	local loaded = 0
+	
+	if not readfile or not isfile then
+		warn("⚠️ File functions not available")
+		return 0
+	end
+	
+	if not isfile(STORAGE_FILE) then
+		print("📭 No saved recordings")
+		return 0
+	end
+	
+	print("🔍 Loading from: " .. STORAGE_FILE)
+	
+	local success, fileData = pcall(function()
+		return readfile(STORAGE_FILE)
+	end)
+	
+	if not success or not fileData or #fileData == 0 then
+		warn("❌ Failed to read file")
+		return 0
+	end
+	
+	local lines = string.split(fileData, "\n")
+	
+	for _, line in ipairs(lines) do
+		if line and #line > 0 then
+			local sepPos = line:find("##")
+			if sepPos then
+				local name = line:sub(1, sepPos - 1)
+				local data = line:sub(sepPos + 2)
+				
+				if name and data and #name > 0 and #data > 0 then
+					recordings[name] = data
+					loaded = loaded + 1
+					print("✅ Loaded: " .. name)
+				end
+			end
+		end
+	end
+	
+	print("✅ Total loaded: " .. loaded)
+	return loaded
+end
+
+local function saveRecording(name, data)
+	recordings[name] = data
+	saveAllRecordingsToFile()
+	return true
+end
+
+local function loadRecording(name)
+	return recordings[name]
+end
+
+local function listRecordings()
+	local list = {}
+	for name in pairs(recordings) do
+		table.insert(list, name)
+	end
+	table.sort(list)
+	return list
+end
+
+local function deleteRecording(name)
+	recordings[name] = nil
+	saveAllRecordingsToFile()
+end
+
+local function renameRecording(oldName, newName)
+	if recordings[oldName] and not recordings[newName] then
+		local data = recordings[oldName]
+		
+		local parts = string.split(data, "|")
+		parts[1] = newName
+		local newData = table.concat(parts, "|")
+		
+		recordings[newName] = newData
+		recordings[oldName] = nil
+		
+		saveAllRecordingsToFile()
+		
+		print("✏️ Renamed: " .. oldName .. " → " .. newName)
+		return true
+	end
+	return false
+end
+
+local function getRecordingCount()
+	local c = 0
+	for _ in pairs(recordings) do c = c + 1 end
+	return c
+end
+
+-- ================= BERSIHKAN UI LAMA =================
+for _, gui in pairs(PlayerGui:GetChildren()) do
+    if gui.Name:match("FedlyHub") or gui.Name == "AutoWalkUI" then
+        gui:Destroy()
+    end
+end
+
+-- ================= SCREEN GUI =================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FedlyHubV33"
+screenGui.IgnoreGuiInset = true
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+-- ================= FLOATING ICON =================
+local floatBtn = Instance.new("ImageButton")
+floatBtn.Size = isMobile and UDim2.new(0, 50, 0, 50) or UDim2.new(0, 60, 0, 60)
+floatBtn.Position = UDim2.new(0.05, 0, 0.12, 0)
+floatBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+floatBtn.Image = "rbxassetid://6031068433"
+floatBtn.Parent = screenGui
+Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0.25, 0)
+
+local floatStroke = Instance.new("UIStroke", floatBtn)
+floatStroke.Color = Color3.fromRGB(255, 255, 255)
+floatStroke.Thickness = 2
+floatStroke.Transparency = 0.8
+
+-- Draggable
+local dragging = false
+local dragStart = nil
+local startPos = nil
+local dragThreshold = 10
+
+floatBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+        dragStart = input.Position
+        startPos = floatBtn.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragStart and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = (input.Position - dragStart).Magnitude
+        if delta > dragThreshold then
+            dragging = true
+            local moveDelta = input.Position - dragStart
+            floatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + moveDelta.X, startPos.Y.Scale, startPos.Y.Offset + moveDelta.Y)
+        end
+    end
+end)
+
+floatBtn.InputEnded:Connect(function() 
+    dragStart = nil
+    dragging = false
+end)
+
+-- ================= VERIFY FRAME =================
+local verifyFrame = Instance.new("Frame")
+verifyFrame.Size = isMobile and UDim2.new(0, 280, 0, 155) or UDim2.new(0, 420, 0, 240)
+verifyFrame.Position = isMobile and UDim2.new(0.5, 0, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
+verifyFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+verifyFrame.BackgroundColor3 = Color3.fromRGB(20, 23, 32)
+verifyFrame.BackgroundTransparency = 0.2
+verifyFrame.Visible = false
+verifyFrame.Parent = screenGui
+verifyFrame.Active = true
+Instance.new("UICorner", verifyFrame).CornerRadius = UDim.new(0, 14)
+
+local verifyStroke = Instance.new("UIStroke", verifyFrame)
+verifyStroke.Color = Color3.fromRGB(88, 101, 242)
+verifyStroke.Thickness = 2
+
+-- Make verify frame draggable
+local verifyDragging = false
+local verifyDragStart = nil
+local verifyStartPos = nil
+
+verifyFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        verifyDragging = true
+        verifyDragStart = input.Position
+        verifyStartPos = verifyFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                verifyDragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if verifyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - verifyDragStart
+        verifyFrame.Position = UDim2.new(
+            verifyStartPos.X.Scale,
+            verifyStartPos.X.Offset + delta.X,
+            verifyStartPos.Y.Scale,
+            verifyStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Title
+local title = Instance.new("TextLabel", verifyFrame)
+title.Size = UDim2.new(1, 0, 0, isMobile and 38 or 50)
+title.Position = UDim2.new(0, 0, 0, isMobile and 8 or 20)
+title.BackgroundTransparency = 1
+title.Text = "Fedly Script Hub"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = isMobile and 18 or 35
+
+-- Key Input
+local keyBox = Instance.new("TextBox", verifyFrame)
+keyBox.Size = isMobile and UDim2.new(0, 250, 0, 32) or UDim2.new(0, 370, 0, 45)
+keyBox.Position = isMobile and UDim2.new(0, 15, 0, 48) or UDim2.new(0, 25, 0, 85)
+keyBox.BackgroundColor3 = Color3.fromRGB(30, 34, 45)
+keyBox.BackgroundTransparency = 0.3
+keyBox.PlaceholderText = "Enter License Key"
+keyBox.PlaceholderColor3 = Color3.fromRGB(120, 125, 140)
+keyBox.Text = ""
+keyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+keyBox.Font = Enum.Font.Gotham
+keyBox.TextSize = isMobile and 11 or 15
+Instance.new("UICorner", keyBox).CornerRadius = UDim.new(0, 8)
+
+local keyBoxStroke = Instance.new("UIStroke", keyBox)
+keyBoxStroke.Color = Color3.fromRGB(60, 65, 80)
+keyBoxStroke.Thickness = 1
+
+-- Buttons
+local dcBtn = Instance.new("TextButton", verifyFrame)
+dcBtn.Size = isMobile and UDim2.new(0, 115, 0, 32) or UDim2.new(0, 175, 0, 45)
+dcBtn.Position = isMobile and UDim2.new(0, 15, 0, 88) or UDim2.new(0, 25, 0, 150)
+dcBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+dcBtn.BackgroundTransparency = 0.1
+dcBtn.Text = "Discord"
+dcBtn.TextColor3 = Color3.new(1, 1, 1)
+dcBtn.Font = Enum.Font.GothamBold
+dcBtn.TextSize = isMobile and 11 or 15
+Instance.new("UICorner", dcBtn).CornerRadius = UDim.new(0, 8)
+
+local verifyBtn = Instance.new("TextButton", verifyFrame)
+verifyBtn.Size = isMobile and UDim2.new(0, 115, 0, 32) or UDim2.new(0, 175, 0, 45)
+verifyBtn.Position = isMobile and UDim2.new(0, 150, 0, 88) or UDim2.new(0, 220, 0, 150)
+verifyBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+verifyBtn.BackgroundTransparency = 0.1
+verifyBtn.Text = "Verify"
+verifyBtn.TextColor3 = Color3.new(1, 1, 1)
+verifyBtn.Font = Enum.Font.GothamBold
+verifyBtn.TextSize = isMobile and 11 or 15
+Instance.new("UICorner", verifyBtn).CornerRadius = UDim.new(0, 8)
+
+-- Status
+local status = Instance.new("TextLabel", verifyFrame)
+status.Size = UDim2.new(1, 0, 0, 16)
+status.Position = UDim2.new(0, 0, 0, isMobile and 130 or 205)
+status.BackgroundTransparency = 1
+status.Text = "Ready to verify"
+status.TextColor3 = Color3.fromRGB(140, 145, 160)
+status.Font = Enum.Font.Gotham
+status.TextSize = isMobile and 9 or 13
+status.TextXAlignment = Enum.TextXAlignment.Center
+
+
+-- ================= MAIN MENU FRAME (LANDSCAPE) =================
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = isMobile and UDim2.new(0, 340, 0, 280) or UDim2.new(0, 700, 0, 400)
+mainFrame.Position = isMobile and UDim2.new(0.5, 0, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 23, 32)
+mainFrame.BackgroundTransparency = 0.2
+mainFrame.Visible = false
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
+
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = Color3.fromRGB(88, 101, 242)
+mainStroke.Thickness = 2
+
+-- Make main frame draggable
+local mainDragging = false
+local mainDragStart = nil
+local mainStartPos = nil
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        mainDragging = true
+        mainDragStart = input.Position
+        mainStartPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                mainDragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if mainDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - mainDragStart
+        mainFrame.Position = UDim2.new(
+            mainStartPos.X.Scale,
+            mainStartPos.X.Offset + delta.X,
+            mainStartPos.Y.Scale,
+            mainStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Header
+local mainHeader = Instance.new("Frame", mainFrame)
+mainHeader.Size = UDim2.new(1, 0, 0, isMobile and 45 or 60)
+mainHeader.BackgroundColor3 = Color3.fromRGB(30, 34, 45)
+mainHeader.BackgroundTransparency = 0.3
+Instance.new("UICorner", mainHeader).CornerRadius = UDim.new(0, 14)
+
+local mainTitle = Instance.new("TextLabel", mainHeader)
+mainTitle.Size = UDim2.new(1, 0, 1, 0)
+mainTitle.BackgroundTransparency = 1
+mainTitle.Text = "Fedly Hub - Auto Walk"
+mainTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainTitle.Font = Enum.Font.GothamBold
+mainTitle.TextSize = isMobile and 15 or 24
+
+-- Menu List Container
+local menuListFrame = Instance.new("ScrollingFrame", mainFrame)
+menuListFrame.Name = "MenuList"
+menuListFrame.Size = UDim2.new(1, -20, 1, isMobile and -60 or -80)
+menuListFrame.Position = UDim2.new(0, 10, 0, isMobile and 50 or 65)
+menuListFrame.BackgroundTransparency = 1
+menuListFrame.BorderSizePixel = 0
+menuListFrame.ScrollBarThickness = 4
+menuListFrame.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+menuListFrame.Visible = true
+
+local menuLayout = Instance.new("UIListLayout", menuListFrame)
+menuLayout.Padding = UDim.new(0, isMobile and 8 or 12)
+menuLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local menuPadding = Instance.new("UIPadding", menuListFrame)
+menuPadding.PaddingTop = UDim.new(0, isMobile and 8 or 12)
+menuPadding.PaddingBottom = UDim.new(0, isMobile and 8 or 12)
+
+-- Content Frames (Hidden by default)
+local mountContent = Instance.new("Frame", mainFrame)
+mountContent.Name = "MountContent"
+mountContent.Size = UDim2.new(1, -20, 1, isMobile and -60 or -80)
+mountContent.Position = UDim2.new(0, 10, 0, isMobile and 50 or 65)
+mountContent.BackgroundTransparency = 1
+mountContent.Visible = false
+
+local recorderContent = Instance.new("Frame", mainFrame)
+recorderContent.Name = "RecorderContent"
+recorderContent.Size = UDim2.new(1, -20, 1, isMobile and -60 or -80)
+recorderContent.Position = UDim2.new(0, 10, 0, isMobile and 50 or 65)
+recorderContent.BackgroundTransparency = 1
+recorderContent.Visible = false
+
+local playbackContent = Instance.new("Frame", mainFrame)
+playbackContent.Name = "PlaybackContent"
+playbackContent.Size = UDim2.new(1, -20, 1, isMobile and -60 or -80)
+playbackContent.Position = UDim2.new(0, 10, 0, isMobile and 50 or 65)
+playbackContent.BackgroundTransparency = 1
+playbackContent.Visible = false
+
+-- Function to create menu button
+local function createMenuButton(icon, title, description)
+	local btn = Instance.new("TextButton", menuListFrame)
+	btn.Size = UDim2.new(0.96, 0, 0, isMobile and 55 or 75)
+	btn.BackgroundColor3 = Color3.fromRGB(30, 34, 45)
+	btn.BackgroundTransparency = 0.3
+	btn.BorderSizePixel = 0
+	btn.Text = ""
+	btn.AutoButtonColor = false
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+	
+	local btnStroke = Instance.new("UIStroke", btn)
+	btnStroke.Color = Color3.fromRGB(60, 65, 80)
+	btnStroke.Thickness = 1
+	
+	local iconLabel = Instance.new("TextLabel", btn)
+	iconLabel.Size = UDim2.new(0, isMobile and 40 or 55, 1, 0)
+	iconLabel.Position = UDim2.new(0, isMobile and 8 or 12, 0, 0)
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.Text = icon
+	iconLabel.TextSize = isMobile and 22 or 32
+	iconLabel.Font = Enum.Font.GothamBold
+	
+	local titleLabel = Instance.new("TextLabel", btn)
+	titleLabel.Size = UDim2.new(1, isMobile and -100 or -140, 0, isMobile and 20 or 28)
+	titleLabel.Position = UDim2.new(0, isMobile and 50 or 70, 0, isMobile and 8 or 12)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = title
+	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleLabel.TextSize = isMobile and 13 or 18
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	
+	local descLabel = Instance.new("TextLabel", btn)
+	descLabel.Size = UDim2.new(1, isMobile and -100 or -140, 0, isMobile and 16 or 22)
+	descLabel.Position = UDim2.new(0, isMobile and 50 or 70, 0, isMobile and 28 or 40)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Text = description
+	descLabel.TextColor3 = Color3.fromRGB(150, 155, 170)
+	descLabel.TextSize = isMobile and 10 or 13
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	
+	local arrow = Instance.new("TextLabel", btn)
+	arrow.Size = UDim2.new(0, isMobile and 30 or 40, 1, 0)
+	arrow.Position = UDim2.new(1, isMobile and -35 or -45, 0, 0)
+	arrow.BackgroundTransparency = 1
+	arrow.Text = "›"
+	arrow.TextColor3 = Color3.fromRGB(88, 101, 242)
+	arrow.TextSize = isMobile and 28 or 38
+	arrow.Font = Enum.Font.GothamBold
+	
+	-- Hover effect
+	btn.MouseEnter:Connect(function()
+		btnStroke.Color = Color3.fromRGB(88, 101, 242)
+		btn.BackgroundTransparency = 0.1
+	end)
+	
+	btn.MouseLeave:Connect(function()
+		btnStroke.Color = Color3.fromRGB(60, 65, 80)
+		btn.BackgroundTransparency = 0.3
+	end)
+	
+	return btn
+end
+
+-- Create menu buttons
+local mountMenuBtn = createMenuButton("🏔️", "Gunung", "Download dan simpan mount scripts")
+local recorderMenuBtn = createMenuButton("🎬", "Recorder", "Record pergerakan karakter")
+local playbackMenuBtn = createMenuButton("▶️", "Playback", "Play recording dengan animasi")
+
+-- Update canvas size
+task.defer(function()
+	menuListFrame.CanvasSize = UDim2.new(0, 0, 0, menuLayout.AbsoluteContentSize.Y + (isMobile and 16 or 24))
+end)
+
+-- Back button function
+local function createBackButton(parentFrame)
+	local backBtn = Instance.new("TextButton", parentFrame)
+	backBtn.Size = UDim2.new(0, isMobile and 70 or 90, 0, isMobile and 28 or 35)
+	backBtn.Position = UDim2.new(0, 0, 0, 0)
+	backBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	backBtn.BorderSizePixel = 0
+	backBtn.Text = "‹ Back"
+	backBtn.TextColor3 = Color3.new(1, 1, 1)
+	backBtn.TextSize = isMobile and 11 or 14
+	backBtn.Font = Enum.Font.GothamBold
+	Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 8)
+	
+	backBtn.MouseButton1Click:Connect(function()
+		mountContent.Visible = false
+		recorderContent.Visible = false
+		playbackContent.Visible = false
+		menuListFrame.Visible = true
+	end)
+	
+	return backBtn
+end
+
+-- Menu button click handlers
+mountMenuBtn.MouseButton1Click:Connect(function()
+	menuListFrame.Visible = false
+	mountContent.Visible = true
+	createMountButtons()
+end)
+
+recorderMenuBtn.MouseButton1Click:Connect(function()
+	menuListFrame.Visible = false
+	recorderContent.Visible = true
+end)
+
+playbackMenuBtn.MouseButton1Click:Connect(function()
+	menuListFrame.Visible = false
+	playbackContent.Visible = true
+end)
+
+-- ================= MOUNT TAB CONTENT =================
+createBackButton(mountContent)
+
+-- Info label
+local mountInfo = Instance.new("TextLabel", mountContent)
+mountInfo.Size = UDim2.new(1, 0, 0, isMobile and 22 or 28)
+mountInfo.Position = UDim2.new(0, 0, 0, isMobile and 33 or 40)
+mountInfo.BackgroundTransparency = 1
+mountInfo.Text = "Klik kategori untuk melihat daftar gunung"
+mountInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
+mountInfo.TextSize = isMobile and 10 or 13
+mountInfo.Font = Enum.Font.GothamMedium
+mountInfo.TextXAlignment = Enum.TextXAlignment.Center
+
+-- Horizontal scrollable mount buttons
+local mountButtonScroll = Instance.new("ScrollingFrame", mountContent)
+mountButtonScroll.Size = UDim2.new(1, 0, 0, isMobile and 65 or 85)
+mountButtonScroll.Position = UDim2.new(0, 0, 0, isMobile and 58 or 72)
+mountButtonScroll.BackgroundColor3 = Color3.fromRGB(25, 28, 38)
+mountButtonScroll.BackgroundTransparency = 0.4
+mountButtonScroll.BorderSizePixel = 0
+mountButtonScroll.ScrollBarThickness = 3
+mountButtonScroll.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+mountButtonScroll.ScrollingDirection = Enum.ScrollingDirection.X
+mountButtonScroll.CanvasSize = UDim2.new(0, 0, 1, 0)
+Instance.new("UICorner", mountButtonScroll).CornerRadius = UDim.new(0, 10)
+
+local mountButtonLayout = Instance.new("UIListLayout", mountButtonScroll)
+mountButtonLayout.FillDirection = Enum.FillDirection.Horizontal
+mountButtonLayout.Padding = UDim.new(0, isMobile and 8 or 12)
+mountButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+local mountButtonPadding = Instance.new("UIPadding", mountButtonScroll)
+mountButtonPadding.PaddingLeft = UDim.new(0, isMobile and 8 or 12)
+mountButtonPadding.PaddingRight = UDim.new(0, isMobile and 8 or 12)
+
+-- Vertical scroll for mount details
+local mountScroll = Instance.new("ScrollingFrame", mountContent)
+mountScroll.Size = UDim2.new(1, 0, 1, isMobile and -130 or -165)
+mountScroll.Position = UDim2.new(0, 0, 0, isMobile and 128 or 162)
+mountScroll.BackgroundColor3 = Color3.fromRGB(25, 28, 38)
+mountScroll.BackgroundTransparency = 0.4
+mountScroll.BorderSizePixel = 0
+mountScroll.ScrollBarThickness = 3
+mountScroll.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+mountScroll.Visible = false
+Instance.new("UICorner", mountScroll).CornerRadius = UDim.new(0, 10)
+
+local mountLayout = Instance.new("UIListLayout", mountScroll)
+mountLayout.Padding = UDim.new(0, isMobile and 5 or 10)
+mountLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local mountPadding = Instance.new("UIPadding", mountScroll)
+mountPadding.PaddingTop = UDim.new(0, isMobile and 6 or 12)
+mountPadding.PaddingBottom = UDim.new(0, isMobile and 6 or 12)
+
+-- Selected mount label
+local selectedMountLabel = Instance.new("TextLabel", mountContent)
+selectedMountLabel.Size = UDim2.new(1, 0, 0, isMobile and 18 or 23)
+selectedMountLabel.Position = UDim2.new(0, 0, 0, isMobile and 128 or 162)
+selectedMountLabel.BackgroundTransparency = 1
+selectedMountLabel.Text = ""
+selectedMountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+selectedMountLabel.TextSize = isMobile and 11 or 14
+selectedMountLabel.Font = Enum.Font.GothamBold
+selectedMountLabel.TextXAlignment = Enum.TextXAlignment.Center
+selectedMountLabel.Visible = false
+
+-- ================= RECORDER TAB CONTENT =================
+createBackButton(recorderContent)
+local recStatus = Instance.new("TextLabel", recorderContent)
+recStatus.Size = UDim2.new(1, 0, 0, isMobile and 22 or 28)
+recStatus.Position = UDim2.new(0, 0, 0, isMobile and 33 or 40)
+recStatus.BackgroundTransparency = 1
+recStatus.Text = "Status: Idle"
+recStatus.TextColor3 = Color3.fromRGB(200, 200, 200)
+recStatus.TextSize = isMobile and 11 or 14
+recStatus.Font = Enum.Font.Gotham
+recStatus.TextXAlignment = Enum.TextXAlignment.Left
+
+local recFrames = Instance.new("TextLabel", recorderContent)
+recFrames.Size = UDim2.new(1, 0, 0, isMobile and 18 or 23)
+recFrames.Position = UDim2.new(0, 0, 0, isMobile and 53 or 66)
+recFrames.BackgroundTransparency = 1
+recFrames.Text = "Frames: 0"
+recFrames.TextColor3 = Color3.fromRGB(150, 150, 150)
+recFrames.TextSize = isMobile and 10 or 12
+recFrames.Font = Enum.Font.Gotham
+recFrames.TextXAlignment = Enum.TextXAlignment.Left
+
+local function recBtn(name, text, pos, color)
+	local b = Instance.new("TextButton", recorderContent)
+	b.Name = name
+	b.Size = UDim2.new(0.48, 0, 0, isMobile and 32 or 40)
+	b.Position = pos
+	b.BackgroundColor3 = color
+	b.BorderSizePixel = 0
+	b.Text = text
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.TextSize = isMobile and 12 or 16
+	b.Font = Enum.Font.GothamBold
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = b
+	return b
+end
+
+local recordBtn = recBtn("Rec", "🔴 Record", UDim2.new(0, 0, 0, isMobile and 75 or 95), Color3.fromRGB(220, 50, 50))
+local stopBtn = recBtn("Stop", "⏹️ Stop", UDim2.new(0.52, 0, 0, isMobile and 75 or 95), Color3.fromRGB(200, 100, 50))
+local saveBtn = recBtn("Save", "💾 Save", UDim2.new(0, 0, 0, isMobile and 115 or 145), Color3.fromRGB(50, 150, 220))
+
+-- ================= PLAYBACK TAB CONTENT =================
+createBackButton(playbackContent)
+-- Animation Selector
+local animLabel = Instance.new("TextLabel", playbackContent)
+animLabel.Size = UDim2.new(1, 0, 0, isMobile and 16 or 20)
+animLabel.Position = UDim2.new(0, 0, 0, isMobile and 33 or 40)
+animLabel.BackgroundTransparency = 1
+animLabel.Text = "Animation Package:"
+animLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+animLabel.TextSize = isMobile and 10 or 12
+animLabel.Font = Enum.Font.GothamBold
+animLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local animDropdown = Instance.new("TextButton", playbackContent)
+animDropdown.Size = UDim2.new(1, 0, 0, isMobile and 26 or 30)
+animDropdown.Position = UDim2.new(0, 0, 0, isMobile and 51 or 62)
+animDropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+animDropdown.BorderSizePixel = 0
+animDropdown.Text = "▼ " .. selectedAnimPackage
+animDropdown.TextColor3 = Color3.new(1, 1, 1)
+animDropdown.TextSize = isMobile and 10 or 13
+animDropdown.Font = Enum.Font.Gotham
+animDropdown.TextXAlignment = Enum.TextXAlignment.Left
+Instance.new("UICorner", animDropdown).CornerRadius = UDim.new(0, 6)
+
+local animPadding = Instance.new("UIPadding", animDropdown)
+animPadding.PaddingLeft = UDim.new(0, 10)
+
+-- Loop Toggle
+local loopToggle = Instance.new("TextButton", playbackContent)
+loopToggle.Size = UDim2.new(0, isMobile and 70 or 80, 0, isMobile and 18 or 22)
+loopToggle.Position = UDim2.new(1, isMobile and -75 or -85, 0, isMobile and 33 or 40)
+loopToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+loopToggle.BorderSizePixel = 0
+loopToggle.Text = "🔁 Loop: OFF"
+loopToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
+loopToggle.TextSize = isMobile and 8 or 11
+loopToggle.Font = Enum.Font.GothamBold
+Instance.new("UICorner", loopToggle).CornerRadius = UDim.new(0, 5)
+
+-- Dropdown menu (ScrollingFrame untuk bisa di-scroll)
+local dropdownMenu = Instance.new("ScrollingFrame", playbackContent)
+dropdownMenu.Size = UDim2.new(1, 0, 0, 0)
+dropdownMenu.Position = UDim2.new(0, 0, 0, isMobile and 79 or 94)
+dropdownMenu.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+dropdownMenu.BorderSizePixel = 0
+dropdownMenu.Visible = false
+dropdownMenu.ClipsDescendants = true
+dropdownMenu.ZIndex = 10
+dropdownMenu.ScrollBarThickness = isMobile and 6 or 4
+dropdownMenu.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+dropdownMenu.CanvasSize = UDim2.new(0, 0, 0, 0)
+dropdownMenu.ScrollingDirection = Enum.ScrollingDirection.Y
+dropdownMenu.ScrollingEnabled = true
+dropdownMenu.Active = true
+dropdownMenu.ElasticBehavior = Enum.ElasticBehavior.Always
+dropdownMenu.ScrollBarImageTransparency = 0
+Instance.new("UICorner", dropdownMenu).CornerRadius = UDim.new(0, 6)
+
+local dropLayout = Instance.new("UIListLayout", dropdownMenu)
+dropLayout.Padding = UDim.new(0, 2)
+dropLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local packageNames = {}
+for name in pairs(AnimationPackages) do
+	table.insert(packageNames, name)
+end
+table.sort(packageNames)
+
+-- Deklarasi variabel dropdown state di awal
+local dropdownOpen = false
+local maxDropdownHeight = isMobile and 180 or 200
+
+for _, packageName in ipairs(packageNames) do
+	local item = Instance.new("TextButton", dropdownMenu)
+	item.Size = UDim2.new(1, isMobile and -10 or -8, 0, isMobile and 32 or 28)
+	item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	item.BorderSizePixel = 0
+	item.Text = packageName
+	item.TextColor3 = Color3.new(1, 1, 1)
+	item.TextSize = isMobile and 11 or 12
+	item.Font = Enum.Font.Gotham
+	item.TextXAlignment = Enum.TextXAlignment.Left
+	item.ZIndex = 10
+	item.AutoButtonColor = true
+	
+	local itemPadding = Instance.new("UIPadding", item)
+	itemPadding.PaddingLeft = UDim.new(0, 10)
+	
+	item.MouseEnter:Connect(function()
+		item.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	end)
+	
+	item.MouseLeave:Connect(function()
+		item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end)
+	
+	item.MouseButton1Click:Connect(function()
+		selectedAnimPackage = packageName
+		animDropdown.Text = "▼ " .. packageName
+		dropdownMenu.Visible = false
+		dropdownOpen = false
+		print("🎭 Animation changed to: " .. packageName)
+	end)
+end
+
+-- Update canvas size setelah semua item ditambahkan
+task.defer(function()
+	local totalHeight = dropLayout.AbsoluteContentSize.Y + 4
+	dropdownMenu.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+	print("📏 Dropdown canvas size set to:", totalHeight)
+end)
+
+animDropdown.MouseButton1Click:Connect(function()
+	dropdownOpen = not dropdownOpen
+	dropdownMenu.Visible = dropdownOpen
+	
+	print("📱 Dropdown toggled:", dropdownOpen and "OPEN" or "CLOSED")
+	
+	if dropdownOpen then
+		local itemCount = #packageNames
+		local totalHeight = itemCount * (isMobile and 34 or 30)
+		local finalHeight = math.min(totalHeight, maxDropdownHeight)
+		
+		print("📐 Dropdown height:", finalHeight, "Total items:", itemCount)
+		
+		dropdownMenu:TweenSize(
+			UDim2.new(1, 0, 0, finalHeight),
+			Enum.EasingDirection.Out,
+			Enum.EasingStyle.Quad,
+			0.2,
+			true
+		)
+		
+		-- Update canvas size saat dibuka
+		task.wait(0.25)
+		dropdownMenu.CanvasSize = UDim2.new(0, 0, 0, dropLayout.AbsoluteContentSize.Y + 4)
+	else
+		dropdownMenu:TweenSize(
+			UDim2.new(1, 0, 0, 0),
+			Enum.EasingDirection.Out,
+			Enum.EasingStyle.Quad,
+			0.2,
+			true
+		)
+	end
+end)
+
+loopToggle.MouseButton1Click:Connect(function()
+	loopEnabled = not loopEnabled
+	if loopEnabled then
+		loopToggle.Text = "🔁 Loop: ON"
+		loopToggle.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+		loopToggle.TextColor3 = Color3.new(1, 1, 1)
+		print("🔁 Loop enabled")
+	else
+		loopToggle.Text = "🔁 Loop: OFF"
+		loopToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		loopToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
+		print("⏹️ Loop disabled")
+	end
+end)
+
+-- Recordings List
+local playLabel = Instance.new("TextLabel", playbackContent)
+playLabel.Size = UDim2.new(1, 0, 0, isMobile and 18 or 23)
+playLabel.Position = UDim2.new(0, 0, 0, isMobile and 82 or 99)
+playLabel.BackgroundTransparency = 1
+playLabel.Text = "Saved Recordings: (0)"
+playLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+playLabel.TextSize = isMobile and 10 or 14
+playLabel.Font = Enum.Font.GothamBold
+playLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local playScroll = Instance.new("ScrollingFrame", playbackContent)
+playScroll.Size = UDim2.new(1, 0, 1, isMobile and -140 or -160)
+playScroll.Position = UDim2.new(0, 0, 0, isMobile and 103 or 125)
+playScroll.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+playScroll.BorderSizePixel = 0
+playScroll.ScrollBarThickness = 6
+Instance.new("UICorner", playScroll).CornerRadius = UDim.new(0, 8)
+
+local playLayout = Instance.new("UIListLayout", playScroll)
+playLayout.Padding = UDim.new(0, 5)
+
+local refreshPlayBtn = Instance.new("TextButton", playbackContent)
+refreshPlayBtn.Size = UDim2.new(1, 0, 0, isMobile and 28 or 32)
+refreshPlayBtn.Position = UDim2.new(0, 0, 1, isMobile and -30 or -34)
+refreshPlayBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+refreshPlayBtn.BorderSizePixel = 0
+refreshPlayBtn.Text = "🔄 Refresh List"
+refreshPlayBtn.TextColor3 = Color3.new(1, 1, 1)
+refreshPlayBtn.TextSize = isMobile and 11 or 14
+refreshPlayBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", refreshPlayBtn).CornerRadius = UDim.new(0, 8)
+
+-- Rename Dialog
+local renameDialog = Instance.new("Frame", screenGui)
+renameDialog.Size = UDim2.new(0, isMobile and 260 or 300, 0, isMobile and 130 or 150)
+renameDialog.Position = UDim2.new(0.5, 0, 0.5, 0)
+renameDialog.AnchorPoint = Vector2.new(0.5, 0.5)
+renameDialog.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+renameDialog.BorderSizePixel = 0
+renameDialog.Visible = false
+renameDialog.ZIndex = 100
+Instance.new("UICorner", renameDialog).CornerRadius = UDim.new(0, 10)
+
+local renameTitle = Instance.new("TextLabel", renameDialog)
+renameTitle.Size = UDim2.new(1, 0, 0, isMobile and 35 or 40)
+renameTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+renameTitle.BorderSizePixel = 0
+renameTitle.Text = "Rename Recording"
+renameTitle.TextColor3 = Color3.new(1, 1, 1)
+renameTitle.TextSize = isMobile and 13 or 16
+renameTitle.Font = Enum.Font.GothamBold
+renameTitle.ZIndex = 101
+Instance.new("UICorner", renameTitle).CornerRadius = UDim.new(0, 10)
+
+local renameInput = Instance.new("TextBox", renameDialog)
+renameInput.Size = UDim2.new(1, -20, 0, isMobile and 30 or 35)
+renameInput.Position = UDim2.new(0, 10, 0, isMobile and 42 or 50)
+renameInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+renameInput.BorderSizePixel = 0
+renameInput.Text = ""
+renameInput.PlaceholderText = "Enter new name..."
+renameInput.TextColor3 = Color3.new(1, 1, 1)
+renameInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+renameInput.TextSize = isMobile and 11 or 14
+renameInput.Font = Enum.Font.Gotham
+renameInput.ClearTextOnFocus = false
+renameInput.ZIndex = 101
+Instance.new("UICorner", renameInput).CornerRadius = UDim.new(0, 6)
+
+local renameInputPadding = Instance.new("UIPadding", renameInput)
+renameInputPadding.PaddingLeft = UDim.new(0, 8)
+
+local renameSaveBtn = Instance.new("TextButton", renameDialog)
+renameSaveBtn.Size = UDim2.new(0.48, -5, 0, isMobile and 28 or 35)
+renameSaveBtn.Position = UDim2.new(0, 10, 1, isMobile and -35 or -45)
+renameSaveBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 220)
+renameSaveBtn.BorderSizePixel = 0
+renameSaveBtn.Text = "Save"
+renameSaveBtn.TextColor3 = Color3.new(1, 1, 1)
+renameSaveBtn.TextSize = isMobile and 11 or 14
+renameSaveBtn.Font = Enum.Font.GothamBold
+renameSaveBtn.ZIndex = 101
+Instance.new("UICorner", renameSaveBtn).CornerRadius = UDim.new(0, 6)
+
+local renameCancelBtn = Instance.new("TextButton", renameDialog)
+renameCancelBtn.Size = UDim2.new(0.48, -5, 0, isMobile and 28 or 35)
+renameCancelBtn.Position = UDim2.new(0.52, 0, 1, isMobile and -35 or -45)
+renameCancelBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+renameCancelBtn.BorderSizePixel = 0
+renameCancelBtn.Text = "Cancel"
+renameCancelBtn.TextColor3 = Color3.new(1, 1, 1)
+renameCancelBtn.TextSize = isMobile and 11 or 14
+renameCancelBtn.Font = Enum.Font.GothamBold
+renameCancelBtn.ZIndex = 101
+Instance.new("UICorner", renameCancelBtn).CornerRadius = UDim.new(0, 6)
+
+local currentRenameName = nil
+
+renameCancelBtn.MouseButton1Click:Connect(function()
+	renameDialog.Visible = false
+	currentRenameName = nil
+end)
+
+renameSaveBtn.MouseButton1Click:Connect(function()
+	local newName = renameInput.Text
+	if newName and newName ~= "" and currentRenameName then
+		if renameRecording(currentRenameName, newName) then
+			renameDialog.Visible = false
+			currentRenameName = nil
+			refreshPlaybackList()
+		else
+			warn("⚠️ Failed to rename")
+		end
+	end
+end)
+
+
+-- ================= LOAD SCRIPT LIBRARY (MOUNT TAB) =================
+local currentMountCategory = nil
+
+local function createMountButtons()
+	print("🏔️ Creating mount category buttons...")
+	
+	-- Clear existing buttons
+	for _, child in pairs(mountButtonScroll:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	
+	-- Create category buttons (you can customize these categories)
+	local categories = {
+		{name = "All", icon = "🌍", color = Color3.fromRGB(88, 101, 242)},
+		{name = "Popular", icon = "⭐", color = Color3.fromRGB(255, 200, 50)},
+		{name = "New", icon = "🆕", color = Color3.fromRGB(50, 200, 100)},
+		{name = "Favorites", icon = "❤️", color = Color3.fromRGB(255, 100, 100)},
+	}
+	
+	for _, category in ipairs(categories) do
+		local btn = Instance.new("TextButton", mountButtonScroll)
+		btn.Name = category.name
+		btn.Size = UDim2.new(0, isMobile and 90 or 120, 0, isMobile and 55 or 70)
+		btn.BackgroundColor3 = category.color
+		btn.BackgroundTransparency = 0.2
+		btn.BorderSizePixel = 0
+		btn.Text = category.icon .. "\n" .. category.name
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.TextSize = isMobile and 11 or 14
+		btn.Font = Enum.Font.GothamBold
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+		
+		local btnStroke = Instance.new("UIStroke", btn)
+		btnStroke.Color = Color3.fromRGB(255, 255, 255)
+		btnStroke.Thickness = 2
+		btnStroke.Transparency = 0.7
+		
+		btn.MouseButton1Click:Connect(function()
+			currentMountCategory = category.name
+			selectedMountLabel.Text = "📂 " .. category.name
+			selectedMountLabel.Visible = true
+			mountScroll.Visible = true
+			loadScriptLibrary(category.name)
+		end)
+		
+		-- Hover effect
+		btn.MouseEnter:Connect(function()
+			btn.BackgroundTransparency = 0
+			btnStroke.Transparency = 0.3
+		end)
+		
+		btn.MouseLeave:Connect(function()
+			btn.BackgroundTransparency = 0.2
+			btnStroke.Transparency = 0.7
+		end)
+	end
+	
+	-- Update canvas size
+	task.defer(function()
+		mountButtonScroll.CanvasSize = UDim2.new(0, mountButtonLayout.AbsoluteContentSize.X + (isMobile and 16 or 24), 1, 0)
+	end)
+end
+
+local function loadScriptLibrary(category)
+    print("📚 Loading mount list for category: " .. (category or "All"))
+    
+    -- Clear existing items
+    for _, child in pairs(mountScroll:GetChildren()) do
+        if child:IsA("Frame") or child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+    
+    local loadingLabel = Instance.new("TextLabel", mountScroll)
+    loadingLabel.Size = UDim2.new(0.95, 0, 0, isMobile and 40 or 50)
+    loadingLabel.BackgroundTransparency = 1
+    loadingLabel.Text = "Loading..."
+    loadingLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    loadingLabel.Font = Enum.Font.Gotham
+    loadingLabel.TextSize = isMobile and 12 or 16
+    
+    task.spawn(function()
+        local success, response = pcall(function()
+            return game:HttpGet(BETATES_URL .. "/api/scripts", true)
+        end)
+        
+        loadingLabel:Destroy()
+        
+        if not success then
+            local errorLabel = Instance.new("TextLabel", mountScroll)
+            errorLabel.Size = UDim2.new(0.95, 0, 0, isMobile and 50 or 60)
+            errorLabel.BackgroundTransparency = 1
+            errorLabel.Text = "Failed to connect"
+            errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            errorLabel.Font = Enum.Font.Gotham
+            errorLabel.TextSize = isMobile and 12 or 15
+            return
+        end
+        
+        local jsonSuccess, scripts = pcall(HttpService.JSONDecode, HttpService, response)
+        if not jsonSuccess or type(scripts) ~= "table" then
+            local errorLabel = Instance.new("TextLabel", mountScroll)
+            errorLabel.Size = UDim2.new(0.95, 0, 0, isMobile and 40 or 50)
+            errorLabel.BackgroundTransparency = 1
+            errorLabel.Text = "Invalid response"
+            errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            errorLabel.Font = Enum.Font.Gotham
+            errorLabel.TextSize = isMobile and 12 or 15
+            return
+        end
+        
+        print("✅ Loaded", #scripts, "mounts")
+        
+        if #scripts == 0 then
+            local emptyLabel = Instance.new("TextLabel", mountScroll)
+            emptyLabel.Size = UDim2.new(0.95, 0, 0, isMobile and 40 or 50)
+            emptyLabel.BackgroundTransparency = 1
+            emptyLabel.Text = "No mounts available"
+            emptyLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+            emptyLabel.Font = Enum.Font.Gotham
+            emptyLabel.TextSize = isMobile and 12 or 15
+            return
+        end
+        
+        for _, script in ipairs(scripts) do
+            local mountContainer = Instance.new("Frame", mountScroll)
+            mountContainer.Size = UDim2.new(0.96, 0, 0, isMobile and 36 or 65)
+            mountContainer.BackgroundColor3 = Color3.fromRGB(30, 34, 45)
+            mountContainer.BackgroundTransparency = 0.3
+            mountContainer.BorderSizePixel = 0
+            Instance.new("UICorner", mountContainer).CornerRadius = UDim.new(0, 8)
+            
+            local containerStroke = Instance.new("UIStroke", mountContainer)
+            containerStroke.Color = Color3.fromRGB(60, 65, 80)
+            containerStroke.Thickness = 1
+            
+            local iconLabel = Instance.new("TextLabel", mountContainer)
+            iconLabel.Size = UDim2.new(0, isMobile and 20 or 45, 0, isMobile and 20 or 45)
+            iconLabel.Position = UDim2.new(0, isMobile and 6 or 15, 0.5, isMobile and -10 or -22)
+            iconLabel.BackgroundTransparency = 1
+            iconLabel.Text = "🎮"
+            iconLabel.TextSize = isMobile and 12 or 28
+            
+            local nameLabel = Instance.new("TextLabel", mountContainer)
+            nameLabel.Size = UDim2.new(1, isMobile and -80 or -160, 1, 0)
+            nameLabel.Position = UDim2.new(0, isMobile and 30 or 70, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = script.name
+            nameLabel.TextColor3 = Color3.fromRGB(230, 235, 245)
+            nameLabel.Font = Enum.Font.GothamMedium
+            nameLabel.TextSize = isMobile and 9 or 15
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            
+            local saveBtn = Instance.new("TextButton", mountContainer)
+            saveBtn.Size = UDim2.new(0, isMobile and 48 or 85, 0, isMobile and 22 or 40)
+            saveBtn.Position = UDim2.new(1, isMobile and -52 or -95, 0.5, isMobile and -11 or -20)
+            saveBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            saveBtn.BackgroundTransparency = 0.1
+            saveBtn.Text = "Save"
+            saveBtn.TextColor3 = Color3.new(1, 1, 1)
+            saveBtn.Font = Enum.Font.GothamBold
+            saveBtn.TextSize = isMobile and 9 or 14
+            Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 6)
+            
+            -- Hover effect
+            mountContainer.MouseEnter:Connect(function()
+                containerStroke.Color = Color3.fromRGB(88, 101, 242)
+                nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end)
+            
+            mountContainer.MouseLeave:Connect(function()
+                containerStroke.Color = Color3.fromRGB(60, 65, 80)
+                nameLabel.TextColor3 = Color3.fromRGB(230, 235, 245)
+            end)
+            
+            saveBtn.MouseButton1Click:Connect(function()
+                saveBtn.Text = "..."
+                saveBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 110)
+                
+                local encodedName = urlEncode(script.name)
+                
+                local scriptSuccess, scriptContent = pcall(function()
+                    return game:HttpGet(BETATES_URL .. "/script/" .. encodedName, true)
+                end)
+                
+                if scriptSuccess and scriptContent and not scriptContent:match("Script not found") then
+                    local saveSuccess = saveMountToStorage(script.name, scriptContent)
+                    if saveSuccess then
+                        saveBtn.Text = "✓"
+                        saveBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 100)
+                        print("✅ Saved mount:", script.name)
+                    else
+                        saveBtn.Text = "✗"
+                        saveBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+                        warn("Save failed")
+                    end
+                    task.wait(2)
+                    saveBtn.Text = "Save"
+                    saveBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+                else
+                    saveBtn.Text = "✗"
+                    saveBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+                    warn("Download failed for:", script.name)
+                    task.wait(1.5)
+                    saveBtn.Text = "Save"
+                    saveBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+                end
+            end)
+        end
+        
+        mountScroll.CanvasSize = UDim2.new(0, 0, 0, mountLayout.AbsoluteContentSize.Y + (isMobile and 16 or 24))
+    end)
+end
+
+-- ================= REFRESH PLAYBACK LIST =================
+function refreshPlaybackList()
+	print("🔄 Refreshing playback list...")
+	
+	for _, child in ipairs(playScroll:GetChildren()) do
+		if child:IsA("Frame") or child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+	
+	local list = listRecordings()
+	local count = #list
+	
+	playLabel.Text = "Saved Recordings: (" .. count .. ")"
+	print("📋 Found " .. count .. " recordings")
+	
+	if count == 0 then
+		local empty = Instance.new("TextLabel", playScroll)
+		empty.Size = UDim2.new(1, -10, 0, isMobile and 35 or 40)
+		empty.BackgroundTransparency = 1
+		empty.Text = "No recordings yet"
+		empty.TextColor3 = Color3.fromRGB(120, 120, 120)
+		empty.TextSize = isMobile and 11 or 13
+		empty.Font = Enum.Font.Gotham
+		return
+	end
+	
+	for _, name in ipairs(list) do
+		print("➕ Adding: " .. name)
+		
+		local item = Instance.new("Frame", playScroll)
+		item.Size = UDim2.new(1, -10, 0, isMobile and 50 or 55)
+		item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		item.BorderSizePixel = 0
+		Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
+		
+		local label = Instance.new("TextLabel", item)
+		label.Size = UDim2.new(1, -10, 0, isMobile and 18 or 22)
+		label.Position = UDim2.new(0, 5, 0, 2)
+		label.BackgroundTransparency = 1
+		label.Text = name
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.TextSize = isMobile and 11 or 13
+		label.Font = Enum.Font.GothamBold
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+		
+		local play = Instance.new("TextButton", item)
+		play.Size = UDim2.new(0.3, -5, 0, isMobile and 24 or 28)
+		play.Position = UDim2.new(0, 5, 1, isMobile and -26 or -30)
+		play.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+		play.BorderSizePixel = 0
+		play.Text = "▶ Play"
+		play.TextColor3 = Color3.new(1, 1, 1)
+		play.TextSize = isMobile and 10 or 12
+		play.Font = Enum.Font.GothamBold
+		Instance.new("UICorner", play).CornerRadius = UDim.new(0, 5)
+		
+		local edit = Instance.new("TextButton", item)
+		edit.Size = UDim2.new(0.3, -5, 0, isMobile and 24 or 28)
+		edit.Position = UDim2.new(0.33, 0, 1, isMobile and -26 or -30)
+		edit.BackgroundColor3 = Color3.fromRGB(100, 150, 220)
+		edit.BorderSizePixel = 0
+		edit.Text = "✏ Edit"
+		edit.TextColor3 = Color3.new(1, 1, 1)
+		edit.TextSize = isMobile and 10 or 12
+		edit.Font = Enum.Font.GothamBold
+		Instance.new("UICorner", edit).CornerRadius = UDim.new(0, 5)
+		
+		local del = Instance.new("TextButton", item)
+		del.Size = UDim2.new(0.3, -5, 0, isMobile and 24 or 28)
+		del.Position = UDim2.new(0.66, 0, 1, isMobile and -26 or -30)
+		del.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		del.BorderSizePixel = 0
+		del.Text = "🗑 Del"
+		del.TextColor3 = Color3.new(1, 1, 1)
+		del.TextSize = isMobile and 10 or 12
+		del.Font = Enum.Font.GothamBold
+		Instance.new("UICorner", del).CornerRadius = UDim.new(0, 5)
+		
+		play.MouseButton1Click:Connect(function()
+			print("========================================")
+			print("▶️ PLAY BUTTON CLICKED: " .. name)
+			print("========================================")
+			
+			-- Check if system exists
+			if not system then
+				warn("❌ ERROR: System is nil!")
+				return
+			end
+			print("✅ System exists")
+			
+			-- Load recording data
+			print("📂 Loading recording data...")
+			local data = loadRecording(name)
+			
+			if not data then
+				warn("❌ ERROR: Failed to load recording data for: " .. name)
+				warn("❌ Recording might not exist in storage")
+				return
+			end
+			print("✅ Recording data loaded, length: " .. #data)
+			
+			-- Deserialize
+			print("🔄 Deserializing recording...")
+			local success, rec = pcall(function()
+				return deserialize(data)
+			end)
+			
+			if not success then
+				warn("❌ ERROR: Failed to deserialize recording!")
+				warn("❌ Error: " .. tostring(rec))
+				return
+			end
+			
+			if not rec then
+				warn("❌ ERROR: Deserialized recording is nil!")
+				return
+			end
+			print("✅ Deserialized successfully")
+			print("📊 Recording info:")
+			print("   - Name: " .. (rec.name or "unknown"))
+			print("   - Frames: " .. (rec.frameCount or 0))
+			print("   - Hip Height: " .. (rec.hipHeight or 0))
+			
+			-- Check character
+			if not Player.Character then
+				warn("❌ ERROR: Player.Character is nil!")
+				return
+			end
+			print("✅ Player.Character exists")
+			
+			-- Check HumanoidRootPart
+			local hrp = Player.Character:FindFirstChild("HumanoidRootPart")
+			if not hrp then
+				warn("❌ ERROR: HumanoidRootPart not found!")
+				return
+			end
+			print("✅ HumanoidRootPart found")
+			
+			-- Start playback
+			print("🎬 Starting playback...")
+			local playSuccess, playError = pcall(function()
+				system:startPlayback(Player.Character, rec)
+			end)
+			
+			if not playSuccess then
+				warn("❌ ERROR: Failed to start playback!")
+				warn("❌ Error: " .. tostring(playError))
+				return
+			end
+			
+			print("✅ Playback started successfully!")
+			recFrames.Text = "Playing: " .. rec.frameCount .. " frames"
+			updateRecorderUI()
+			print("========================================")
+		end)
+		
+		edit.MouseButton1Click:Connect(function()
+			print("✏️ Editing: " .. name)
+			currentRenameName = name
+			renameInput.Text = name
+			renameDialog.Visible = true
+		end)
+		
+		del.MouseButton1Click:Connect(function()
+			print("🗑️ Deleting: " .. name)
+			deleteRecording(name)
+			refreshPlaybackList()
+		end)
+	end
+	
+	playScroll.CanvasSize = UDim2.new(0, 0, 0, playLayout.AbsoluteContentSize.Y + 10)
+	print("✅ List refreshed")
+end
+
+-- ================= VERIFY KEY =================
+local function verifyKey()
+    local key = string.gsub(keyBox.Text, "%s+", "")
+    if #key == 0 then
+        status.Text = "Please enter a key"
+        status.TextColor3 = Color3.fromRGB(255, 120, 120)
+        return
+    end
+    
+    status.Text = "Verifying..."
+    status.TextColor3 = Color3.fromRGB(255, 200, 100)
+    verifyBtn.Text = "..."
+    verifyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 110)
+    
+    currentKey = key
+    currentUserId = tostring(Player.UserId)
+    
+    local random = math.random(100000, 999999)
+    local url = API_URL .. "/v1/verify?key=" .. urlEncode(key) .. "&userid=" .. urlEncode(currentUserId) .. "&action=verify&_r=" .. random
+    local response = httpGetRequest(url)
+    
+    verifyBtn.Text = "Verify"
+    verifyBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+    
+    if not response then
+        status.Text = "Connection failed"
+        status.TextColor3 = Color3.fromRGB(255, 120, 120)
+        return
+    end
+    
+    local jsonSuccess, data = pcall(HttpService.JSONDecode, HttpService, response)
+    if jsonSuccess and type(data) == "table" then
+        if data.success == true then
+            status.Text = "Success! Loading..."
+            status.TextColor3 = Color3.fromRGB(100, 220, 150)
+            isVerified = true
+            startHeartbeat(key, currentUserId)
+            task.wait(0.8)
+            verifyFrame.Visible = false
+            mainFrame.Visible = true
+            createMountButtons()
+            loadAllRecordingsFromFile()
+            refreshPlaybackList()
+        else
+            local errorMsg = data.message or data.error or "Invalid key"
+            status.Text = errorMsg
+            status.TextColor3 = Color3.fromRGB(255, 120, 120)
+            if data.waitTime then
+                status.Text = "Wait " .. data.waitTime .. "s"
+            end
+        end
+    else
+        status.Text = "Server error"
+        status.TextColor3 = Color3.fromRGB(255, 120, 120)
+    end
+end
+
+-- ================= RECORDER FUNCTIONS =================
+-- system sudah diinisialisasi di atas (setelah System class)
+
+function updateRecorderUI()
+	local s = system.state
+	recStatus.Text = "Status: " .. (s == "idle" and "Idle" or s == "recording" and "Recording" or "Playing")
+	recStatus.TextColor3 = s == "idle" and Color3.fromRGB(200, 200, 200) or 
+	                     s == "recording" and Color3.fromRGB(220, 50, 50) or 
+	                     Color3.fromRGB(50, 200, 100)
+end
+
+recordBtn.MouseButton1Click:Connect(function()
+	print("🔴 Recording started")
+	system:startRecording(Player.Character)
+	recordedFrames = nil
+	recFrames.Text = "Recording..."
+	updateRecorderUI()
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+	print("⏹️ Stop clicked")
+	if system.state == "recording" then
+		local frames, hipHeight = system:stopRecording()
+		recordedFrames = {frames = frames, hipHeight = hipHeight}
+		if frames then
+			recFrames.Text = "Frames: " .. #frames
+			print("✓ Recorded " .. #frames .. " frames (HipHeight: " .. hipHeight .. ")")
+		end
+	else
+		system:forceStop()
+		recFrames.Text = "Stopped"
+	end
+	updateRecorderUI()
+end)
+
+saveBtn.MouseButton1Click:Connect(function()
+	print("💾 Save clicked")
+	
+	if system.state == "recording" then
+		print("⏹️ Auto-stopping recording before save...")
+		local frames, hipHeight = system:stopRecording()
+		recordedFrames = {frames = frames, hipHeight = hipHeight}
+		if frames then
+			recFrames.Text = "Frames: " .. #frames
+			print("✓ Recorded " .. #frames .. " frames (HipHeight: " .. hipHeight .. ")")
+		end
+		updateRecorderUI()
+		task.wait(0.1)
+	end
+	
+	if not recordedFrames or not recordedFrames.frames or #recordedFrames.frames == 0 then
+		warn("⚠️ No recording to save")
+		return
+	end
+	
+	local name = "rec_" .. os.date("%H%M%S")
+	print("📝 Saving: " .. name .. " (" .. #recordedFrames.frames .. " frames)")
+	
+	local data = serialize(name, recordedFrames.frames, recordedFrames.hipHeight)
+	saveRecording(name, data)
+	
+	print("✅ Saved! Total: " .. getRecordingCount())
+	print("🔄 Refreshing list...")
+	
+	refreshPlaybackList()
+end)
+
+refreshPlayBtn.MouseButton1Click:Connect(function()
+	print("🔄 Refresh clicked")
+	refreshPlaybackList()
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(0.3)
+		updateRecorderUI()
+		if system.state == "recording" and system.recorder then
+			recFrames.Text = "Recording: " .. #system.recorder.frames .. " frames"
+		end
+	end
+end)
+
+-- ================= EVENTS =================
+floatBtn.MouseButton1Click:Connect(function()
+    if isVerified then
+        mainFrame.Visible = not mainFrame.Visible
+    else
+        verifyFrame.Visible = not verifyFrame.Visible
+    end
+end)
+
+dcBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard(DISCORD_LINK)
+        status.Text = "Discord link copied!"
+        status.TextColor3 = Color3.fromRGB(100, 220, 150)
+        task.wait(2)
+        status.Text = "Ready to verify"
+        status.TextColor3 = Color3.fromRGB(140, 145, 160)
+    end
+end)
+
+verifyBtn.MouseButton1Click:Connect(verifyKey)
+keyBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then verifyKey() end
+end)
+
+-- ================= CLEANUP =================
+game:BindToClose(function()
+    if heartbeatThread then
+        task.cancel(heartbeatThread)
+    end
+    if currentKey ~= "" and currentUserId ~= "" then
+        pcall(function()
+            local random = math.random(100000, 999999)
+            local url = API_URL .. "/v1/logout?key=" .. urlEncode(currentKey) .. "&userid=" .. urlEncode(currentUserId) .. "&action=logout&_r=" .. random
+            game:HttpGet(url, true)
+            print("👋 Logout sent")
+        end)
+    end
+end)
+
+-- ================= STARTUP =================
+print("=== FEDLY HUB + AUTO WALK SYSTEM ===")
+print("✅ Combined UI with verification")
+print("📱 Mobile optimized: " .. tostring(isMobile))
+print("🏔️ Mount list with single file storage")
+print("🎬 Auto Walk Recorder & Playback")
+print("🎭 Animation packages: " .. #packageNames)
+print("=====================================")
+
+-- Load saved mounts on startup
+loadAllMountsFromFile()
+
+updateRecorderUI()
+ ]]
