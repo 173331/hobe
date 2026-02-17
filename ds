@@ -49,42 +49,57 @@ function Recorder:start()
 	self.animationIds = {}
 	self.startTime = tick()
 	
-	-- Capture animations
-	if self.humanoid then
-		local animator = self.humanoid:FindFirstChildOfClass("Animator")
-		if animator then
-			for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-				local animId = track.Animation.AnimationId
-				local numId = animId:match("%d+")
-				if numId then
-					table.insert(self.animationIds, tonumber(numId))
-					print("📹 Recording animation: " .. numId)
-				end
-			end
-		end
-	end
-	
-	-- Record frames
+	-- Record frames with current animation state
 	self.conn = RunService.Heartbeat:Connect(function()
 		if self.root then
 			local elapsed = tick() - self.startTime
+			
+			-- Get current playing animation
+			local currentAnimId = nil
+			if self.humanoid then
+				local animator = self.humanoid:FindFirstChildOfClass("Animator")
+				if animator then
+					local tracks = animator:GetPlayingAnimationTracks()
+					if #tracks > 0 then
+						-- Get the first playing animation
+						local animId = tracks[1].Animation.AnimationId
+						local numId = animId:match("%d+")
+						if numId then
+							currentAnimId = tonumber(numId)
+						end
+					end
+				end
+			end
+			
 			table.insert(self.frames, {
 				cframe = self.root.CFrame,
-				timestamp = elapsed
+				timestamp = elapsed,
+				animId = currentAnimId  -- Store animation per frame
 			})
 		end
 	end)
 	
-	print("🔴 Recording started")
+	print("🔴 Recording started (with animations per frame)")
 end
 
 function Recorder:stop()
 	if self.conn then self.conn:Disconnect() end
-	print("⏹️ Recording stopped: " .. #self.frames .. " frames")
+	
+	-- Collect unique animation IDs
+	local uniqueAnims = {}
+	local animSet = {}
+	for _, frame in ipairs(self.frames) do
+		if frame.animId and not animSet[frame.animId] then
+			table.insert(uniqueAnims, frame.animId)
+			animSet[frame.animId] = true
+		end
+	end
+	
+	print("⏹️ Recording stopped: " .. #self.frames .. " frames, " .. #uniqueAnims .. " unique animations")
 	return {
 		frames = self.frames,
 		hipHeight = self.hipHeight,
-		animationIds = self.animationIds
+		animationIds = uniqueAnims
 	}
 end
 
@@ -120,22 +135,14 @@ function Playback:start()
 	self.index = 1
 	self.startTime = tick()
 	
-	-- Load animations
+	-- Load all unique animations
 	if self.humanoid and self.recording.animationIds and #self.recording.animationIds > 0 then
-		local ids = self.recording.animationIds
-		
-		-- Create animation objects
-		local runAnim = Instance.new("Animation")
-		runAnim.AnimationId = "rbxassetid://" .. ids[1]
-		self.anims.run = self.humanoid:LoadAnimation(runAnim)
-		
-		if ids[2] then
-			local jumpAnim = Instance.new("Animation")
-			jumpAnim.AnimationId = "rbxassetid://" .. ids[2]
-			self.anims.jump = self.humanoid:LoadAnimation(jumpAnim)
+		for _, animId in ipairs(self.recording.animationIds) do
+			local anim = Instance.new("Animation")
+			anim.AnimationId = "rbxassetid://" .. animId
+			self.anims[animId] = self.humanoid:LoadAnimation(anim)
 		end
-		
-		print("✅ Loaded animations")
+		print("✅ Loaded " .. #self.recording.animationIds .. " animations")
 	end
 	
 	-- Disable controls
@@ -144,10 +151,7 @@ function Playback:start()
 		self.humanoid.AutoRotate = false
 	end
 	
-	-- Play animation
-	if self.anims.run then
-		self.anims.run:Play()
-	end
+	local currentPlayingAnim = nil
 	
 	-- Playback loop
 	self.conn = RunService.Heartbeat:Connect(function()
@@ -164,7 +168,6 @@ function Playback:start()
 		-- End of recording
 		if self.index > #frames then
 			if self.loop then
-				-- Restart
 				self.index = 1
 				self.startTime = tick()
 				print("🔁 Loop restart")
@@ -176,7 +179,21 @@ function Playback:start()
 		
 		-- Apply frame
 		if self.index <= #frames then
-			self.root.CFrame = frames[self.index].cframe
+			local frame = frames[self.index]
+			self.root.CFrame = frame.cframe
+			
+			-- Play animation for this frame
+			if frame.animId and self.anims[frame.animId] then
+				if currentPlayingAnim ~= frame.animId then
+					-- Stop previous animation
+					if currentPlayingAnim and self.anims[currentPlayingAnim] then
+						self.anims[currentPlayingAnim]:Stop()
+					end
+					-- Play new animation
+					self.anims[frame.animId]:Play()
+					currentPlayingAnim = frame.animId
+				end
+			end
 		end
 	end)
 	
@@ -368,7 +385,7 @@ local function refreshList()
 		Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
 		
 		local label = Instance.new("TextLabel", item)
-		label.Size = UDim2.new(1, -80, 1, 0)
+		label.Size = UDim2.new(1, -105, 1, 0)
 		label.Position = UDim2.new(0, 5, 0, 0)
 		label.BackgroundTransparency = 1
 		label.Text = rec.name
@@ -379,7 +396,7 @@ local function refreshList()
 		
 		local playBtn = Instance.new("TextButton", item)
 		playBtn.Size = UDim2.new(0, 30, 0, 25)
-		playBtn.Position = UDim2.new(1, -70, 0.5, -12.5)
+		playBtn.Position = UDim2.new(1, -95, 0.5, -12.5)
 		playBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
 		playBtn.Text = "▶"
 		playBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -389,13 +406,23 @@ local function refreshList()
 		
 		local loopBtn = Instance.new("TextButton", item)
 		loopBtn.Size = UDim2.new(0, 30, 0, 25)
-		loopBtn.Position = UDim2.new(1, -35, 0.5, -12.5)
+		loopBtn.Position = UDim2.new(1, -60, 0.5, -12.5)
 		loopBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 200)
 		loopBtn.Text = "🔁"
 		loopBtn.TextColor3 = Color3.new(1, 1, 1)
 		loopBtn.Font = Enum.Font.GothamBold
 		loopBtn.TextSize = 12
 		Instance.new("UICorner", loopBtn).CornerRadius = UDim.new(0, 4)
+		
+		local delBtn = Instance.new("TextButton", item)
+		delBtn.Size = UDim2.new(0, 30, 0, 25)
+		delBtn.Position = UDim2.new(1, -25, 0.5, -12.5)
+		delBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		delBtn.Text = "🗑"
+		delBtn.TextColor3 = Color3.new(1, 1, 1)
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.TextSize = 12
+		Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
 		
 		playBtn.MouseButton1Click:Connect(function()
 			System:startPlayback(rec, false)
@@ -405,6 +432,12 @@ local function refreshList()
 		loopBtn.MouseButton1Click:Connect(function()
 			System:startPlayback(rec, true)
 			updateStatus()
+		end)
+		
+		delBtn.MouseButton1Click:Connect(function()
+			table.remove(recordings, i)
+			print("🗑️ Deleted: " .. rec.name)
+			refreshList()
 		end)
 	end
 	
