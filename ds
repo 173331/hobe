@@ -1718,84 +1718,6 @@ renameDialog.BorderSizePixel = 0
 renameDialog.Visible = false
 renameDialog.ZIndex = 100
 Instance.new("UICorner", renameDialog).CornerRadius = UDim.new(0, 10)
-
-local renameTitle = Instance.new("TextLabel", renameDialog)
-renameTitle.Size = UDim2.new(1, 0, 0, isMobile and 35 or 40)
-renameTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-renameTitle.BorderSizePixel = 0
-renameTitle.Text = "Rename Recording"
-renameTitle.TextColor3 = Color3.new(1, 1, 1)
-renameTitle.TextSize = isMobile and 13 or 16
-renameTitle.Font = Enum.Font.GothamBold
-renameTitle.ZIndex = 101
-Instance.new("UICorner", renameTitle).CornerRadius = UDim.new(0, 10)
-
-local renameInput = Instance.new("TextBox", renameDialog)
-renameInput.Size = UDim2.new(1, -20, 0, isMobile and 30 or 35)
-renameInput.Position = UDim2.new(0, 10, 0, isMobile and 42 or 50)
-renameInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-renameInput.BorderSizePixel = 0
-renameInput.Text = ""
-renameInput.PlaceholderText = "Enter new name..."
-renameInput.TextColor3 = Color3.new(1, 1, 1)
-renameInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-renameInput.TextSize = isMobile and 11 or 14
-renameInput.Font = Enum.Font.Gotham
-renameInput.ClearTextOnFocus = false
-renameInput.ZIndex = 101
-Instance.new("UICorner", renameInput).CornerRadius = UDim.new(0, 6)
-
-local renameInputPadding = Instance.new("UIPadding", renameInput)
-renameInputPadding.PaddingLeft = UDim.new(0, 8)
-
-local renameSaveBtn = Instance.new("TextButton", renameDialog)
-renameSaveBtn.Size = UDim2.new(0.48, -5, 0, isMobile and 28 or 35)
-renameSaveBtn.Position = UDim2.new(0, 10, 1, isMobile and -35 or -45)
-renameSaveBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 220)
-renameSaveBtn.BorderSizePixel = 0
-renameSaveBtn.Text = "Save"
-renameSaveBtn.TextColor3 = Color3.new(1, 1, 1)
-renameSaveBtn.TextSize = isMobile and 11 or 14
-renameSaveBtn.Font = Enum.Font.GothamBold
-renameSaveBtn.ZIndex = 101
-Instance.new("UICorner", renameSaveBtn).CornerRadius = UDim.new(0, 6)
-
-local renameCancelBtn = Instance.new("TextButton", renameDialog)
-renameCancelBtn.Size = UDim2.new(0.48, -5, 0, isMobile and 28 or 35)
-renameCancelBtn.Position = UDim2.new(0.52, 0, 1, isMobile and -35 or -45)
-renameCancelBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-renameCancelBtn.BorderSizePixel = 0
-renameCancelBtn.Text = "Cancel"
-renameCancelBtn.TextColor3 = Color3.new(1, 1, 1)
-renameCancelBtn.TextSize = isMobile and 11 or 14
-renameCancelBtn.Font = Enum.Font.GothamBold
-renameCancelBtn.ZIndex = 101
-Instance.new("UICorner", renameCancelBtn).CornerRadius = UDim.new(0, 6)
-
-local currentRenameName = nil
-
-renameCancelBtn.MouseButton1Click:Connect(function()
-	renameDialog.Visible = false
-	currentRenameName = nil
-end)
-
-renameSaveBtn.MouseButton1Click:Connect(function()
-	local newName = renameInput.Text
-	if newName and newName ~= "" and currentRenameName then
-		if renameRecording(currentRenameName, newName) then
-			renameDialog.Visible = false
-			currentRenameName = nil
-			refreshPlaybackList()
-		else
-			warn("⚠️ Failed to rename")
-		end
-	end
-end)
-
-
-end
-
--- ================= REFRESH PLAYBACK LIST =================
 refreshPlaybackList = function()
 	print("🔄 Refreshing playback list...")
 	
@@ -1978,6 +1900,84 @@ refreshPlaybackList = function()
 		
 		edit.MouseButton1Click:Connect(function()
 			print("✏️ Editing: " .. name)
+
+local renameTitle = Instance.new("TextLabel", renameDialog)
+renameTitle.Size = UDim2.new(1, 0, 0, isMobile and 35 or 40)
+renameTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+renameTitle.BorderSizePixel = 0
+renameTitle.Text = "Rename Recording"
+renameTitle.TextColor3 = Color3.new(1, 1, 1)
+renameTitle.TextSize = isMobile and 13 or 16
+renameTitle.Font = Enum.Font.GothamBold
+renameTitle.ZIndex = 101
+Instance.new("UICorner", renameTitle).CornerRadius = UDim.new(0, 10)
+
+local renameInput = Instance.new("TextBox", renameDialog)
+renameInput.Size = UDim2.new(1, -20, 0, isMobile and 30 or 35)
+renameInput.Position = UDim2.new(0, 10, 0, isMobile and 42 or 50)
+renameInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+renameInput.BorderSizePixel = 0
+renameInput.Text = ""
+renameInput.PlaceholderText = "Enter new name..."
+renameInput.TextColor3 = Color3.new(1, 1, 1)
+renameInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+renameInput.TextSize = isMobile and 11 or 14
+renameInput.Font = Enum.Font.Gotham
+renameInput.ClearTextOnFocus = false
+renameInput.ZIndex = 101
+Instance.new("UICorner", renameInput).CornerRadius = UDim.new(0, 6)
+
+local renameInputPadding = Instance.new("UIPadding", renameInput)
+renameInputPadding.PaddingLeft = UDim.new(0, 8)
+
+local renameSaveBtn = Instance.new("TextButton", renameDialog)
+renameSaveBtn.Size = UDim2.new(0.48, -5, 0, isMobile and 28 or 35)
+renameSaveBtn.Position = UDim2.new(0, 10, 1, isMobile and -35 or -45)
+renameSaveBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 220)
+renameSaveBtn.BorderSizePixel = 0
+renameSaveBtn.Text = "Save"
+renameSaveBtn.TextColor3 = Color3.new(1, 1, 1)
+renameSaveBtn.TextSize = isMobile and 11 or 14
+renameSaveBtn.Font = Enum.Font.GothamBold
+renameSaveBtn.ZIndex = 101
+Instance.new("UICorner", renameSaveBtn).CornerRadius = UDim.new(0, 6)
+
+local renameCancelBtn = Instance.new("TextButton", renameDialog)
+renameCancelBtn.Size = UDim2.new(0.48, -5, 0, isMobile and 28 or 35)
+renameCancelBtn.Position = UDim2.new(0.52, 0, 1, isMobile and -35 or -45)
+renameCancelBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+renameCancelBtn.BorderSizePixel = 0
+renameCancelBtn.Text = "Cancel"
+renameCancelBtn.TextColor3 = Color3.new(1, 1, 1)
+renameCancelBtn.TextSize = isMobile and 11 or 14
+renameCancelBtn.Font = Enum.Font.GothamBold
+renameCancelBtn.ZIndex = 101
+Instance.new("UICorner", renameCancelBtn).CornerRadius = UDim.new(0, 6)
+
+local currentRenameName = nil
+
+renameCancelBtn.MouseButton1Click:Connect(function()
+	renameDialog.Visible = false
+	currentRenameName = nil
+end)
+
+renameSaveBtn.MouseButton1Click:Connect(function()
+	local newName = renameInput.Text
+	if newName and newName ~= "" and currentRenameName then
+		if renameRecording(currentRenameName, newName) then
+			renameDialog.Visible = false
+			currentRenameName = nil
+			refreshPlaybackList()
+		else
+			warn("⚠️ Failed to rename")
+		end
+	end
+end)
+
+
+end
+
+-- ================= REFRESH PLAYBACK LIST =================
 			currentRenameName = name
 			renameInput.Text = name
 			renameDialog.Visible = true
