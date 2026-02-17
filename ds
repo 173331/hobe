@@ -269,78 +269,81 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = PlayerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 300, 0, 400)
-mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+mainFrame.Size = UDim2.new(0, 250, 0, 350)
+mainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BackgroundTransparency = 0.1
 mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
 local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 40)
+title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundTransparency = 1
-title.Text = "Auto Walk Recorder"
+title.Text = "Auto Walk"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 18
+title.TextSize = 16
 
 -- Status
 local status = Instance.new("TextLabel", mainFrame)
-status.Size = UDim2.new(1, -20, 0, 30)
-status.Position = UDim2.new(0, 10, 0, 50)
+status.Size = UDim2.new(1, -20, 0, 25)
+status.Position = UDim2.new(0, 10, 0, 40)
 status.BackgroundTransparency = 1
 status.Text = "Status: Idle"
 status.TextColor3 = Color3.fromRGB(200, 200, 200)
 status.Font = Enum.Font.Gotham
-status.TextSize = 14
+status.TextSize = 12
 
 -- Record button
 local recordBtn = Instance.new("TextButton", mainFrame)
-recordBtn.Size = UDim2.new(0, 130, 0, 40)
-recordBtn.Position = UDim2.new(0, 10, 0, 90)
+recordBtn.Size = UDim2.new(0, 110, 0, 35)
+recordBtn.Position = UDim2.new(0, 10, 0, 70)
 recordBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
 recordBtn.Text = "🔴 Record"
 recordBtn.TextColor3 = Color3.new(1, 1, 1)
 recordBtn.Font = Enum.Font.GothamBold
-recordBtn.TextSize = 14
+recordBtn.TextSize = 13
 Instance.new("UICorner", recordBtn).CornerRadius = UDim.new(0, 8)
 
 -- Stop button
 local stopBtn = Instance.new("TextButton", mainFrame)
-stopBtn.Size = UDim2.new(0, 130, 0, 40)
-stopBtn.Position = UDim2.new(0, 160, 0, 90)
+stopBtn.Size = UDim2.new(0, 110, 0, 35)
+stopBtn.Position = UDim2.new(0, 130, 0, 70)
 stopBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 stopBtn.Text = "⏹️ Stop"
 stopBtn.TextColor3 = Color3.new(1, 1, 1)
 stopBtn.Font = Enum.Font.GothamBold
-stopBtn.TextSize = 14
+stopBtn.TextSize = 13
 Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 8)
 
 -- Save button
 local saveBtn = Instance.new("TextButton", mainFrame)
-saveBtn.Size = UDim2.new(1, -20, 0, 40)
-saveBtn.Position = UDim2.new(0, 10, 0, 140)
+saveBtn.Size = UDim2.new(1, -20, 0, 35)
+saveBtn.Position = UDim2.new(0, 10, 0, 115)
 saveBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-saveBtn.Text = "💾 Save Recording"
+saveBtn.Text = "💾 Save"
 saveBtn.TextColor3 = Color3.new(1, 1, 1)
 saveBtn.Font = Enum.Font.GothamBold
-saveBtn.TextSize = 14
+saveBtn.TextSize = 13
 Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 8)
 
 -- Recordings list
 local listLabel = Instance.new("TextLabel", mainFrame)
 listLabel.Size = UDim2.new(1, -20, 0, 20)
-listLabel.Position = UDim2.new(0, 10, 0, 190)
+listLabel.Position = UDim2.new(0, 10, 0, 160)
 listLabel.BackgroundTransparency = 1
 listLabel.Text = "Recordings:"
 listLabel.TextColor3 = Color3.new(1, 1, 1)
 listLabel.Font = Enum.Font.GothamBold
-listLabel.TextSize = 12
+listLabel.TextSize = 11
 listLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local listScroll = Instance.new("ScrollingFrame", mainFrame)
 listScroll.Size = UDim2.new(1, -20, 0, 160)
-listScroll.Position = UDim2.new(0, 10, 0, 220)
+listScroll.Position = UDim2.new(0, 10, 0, 180)
 listScroll.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 listScroll.BorderSizePixel = 0
 listScroll.ScrollBarThickness = 4
