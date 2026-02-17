@@ -13,38 +13,15 @@ print("✅ Services loaded")
 
 -- ================= STORAGE =================
 local recordings = {}
-local STORAGE_FILE = "autowalk_recordings.txt"
-
-local function serializeCFrame(cf)
-	local p = cf.Position
-	local rx, ry, rz = cf:ToOrientation()
-	return string.format("%.2f,%.2f,%.2f,%.4f,%.4f,%.4f", p.X, p.Y, p.Z, rx, ry, rz)
-end
-
-local function parseCFrame(str)
-	local parts = string.split(str, ",")
-	local pos = Vector3.new(tonumber(parts[1]), tonumber(parts[2]), tonumber(parts[3]))
-	return CFrame.new(pos) * CFrame.fromOrientation(tonumber(parts[4]), tonumber(parts[5]), tonumber(parts[6]))
-end
 
 local function saveRecordings()
-	local data = HttpService:JSONEncode(recordings)
-	writefile(STORAGE_FILE, data)
-	print("✅ Saved " .. #recordings .. " recording(s)")
+	-- In-memory only (no file save)
+	print("✅ Saved " .. #recordings .. " recording(s) in memory")
 end
 
 local function loadRecordings()
-	if not isfile or not readfile then return end
-	if not isfile(STORAGE_FILE) then return end
-	
-	local success, data = pcall(function()
-		return readfile(STORAGE_FILE)
-	end)
-	
-	if success and data then
-		recordings = HttpService:JSONDecode(data)
-		print("✅ Loaded " .. #recordings .. " recording(s)")
-	end
+	-- No file loading, start fresh
+	print("✅ Ready to record")
 end
 
 -- ================= RECORDER =================
@@ -443,16 +420,37 @@ end)
 stopBtn.MouseButton1Click:Connect(function()
 	if System.state == "recording" then
 		currentRecording = System:stopRecording()
-		print("✅ Recording ready to save")
+		if currentRecording and currentRecording.frames then
+			print("✅ Recording ready: " .. #currentRecording.frames .. " frames")
+			status.Text = "✅ Ready to save (" .. #currentRecording.frames .. " frames)"
+			status.TextColor3 = Color3.fromRGB(50, 200, 50)
+		else
+			warn("❌ Recording failed")
+			status.Text = "❌ Recording failed"
+			status.TextColor3 = Color3.fromRGB(255, 50, 50)
+		end
 	else
 		System:stop()
+		updateStatus()
 	end
-	updateStatus()
 end)
 
 saveBtn.MouseButton1Click:Connect(function()
 	if not currentRecording then
-		warn("⚠️ No recording to save")
+		warn("⚠️ No recording to save. Press Record first!")
+		status.Text = "⚠️ Record first!"
+		status.TextColor3 = Color3.fromRGB(255, 150, 0)
+		task.wait(2)
+		updateStatus()
+		return
+	end
+	
+	if not currentRecording.frames or #currentRecording.frames == 0 then
+		warn("⚠️ Recording is empty!")
+		status.Text = "⚠️ Empty recording!"
+		status.TextColor3 = Color3.fromRGB(255, 150, 0)
+		task.wait(2)
+		updateStatus()
 		return
 	end
 	
@@ -462,6 +460,10 @@ saveBtn.MouseButton1Click:Connect(function()
 	saveRecordings()
 	refreshList()
 	currentRecording = nil
+	status.Text = "✅ Saved: " .. name
+	status.TextColor3 = Color3.fromRGB(50, 200, 50)
+	task.wait(2)
+	updateStatus()
 	print("✅ Saved: " .. name)
 end)
 
