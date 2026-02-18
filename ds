@@ -1,516 +1,665 @@
--- ====================== AUTO WALK RECORDER (SIMPLE) ======================
--- Record movement + animations, playback with loop
--- ==========================================================================
+-- =====================================================================================
+-- CHAOS SCANNER & EXECUTOR V1.0
+-- Advanced Remote Scanner + Auto Exploit System
+-- For Private Server Use Only
+-- =====================================================================================
 
-print("🚀 Script starting...")
-
-local Player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
-local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
 
-print("✅ Services loaded")
+-- =====================================================================================
+-- CONFIGURATION
+-- =====================================================================================
 
--- ================= STORAGE =================
-local recordings = {}
-
-local function saveRecordings()
-	-- In-memory only (no file save)
-	print("✅ Saved " .. #recordings .. " recording(s) in memory")
-end
-
-local function loadRecordings()
-	-- No file loading, start fresh
-	print("✅ Ready to record")
-end
-
--- ================= RECORDER =================
-local Recorder = {}
-Recorder.__index = Recorder
-
-function Recorder.new(char)
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	local humanoid = char:FindFirstChild("Humanoid")
-	
-	return setmetatable({
-		char = char,
-		root = hrp,
-		humanoid = humanoid,
-		hipHeight = humanoid and humanoid.HipHeight or 0,
-		frames = {},
-		animationIds = {},
-		startTime = 0,
-		conn = nil
-	}, Recorder)
-end
-
-function Recorder:start()
-	self.frames = {}
-	self.animationIds = {}
-	self.startTime = tick()
-	
-	-- Record frames with current animation state
-	self.conn = RunService.Heartbeat:Connect(function()
-		if self.root then
-			local elapsed = tick() - self.startTime
-			
-			-- Get current playing animation
-			local currentAnimId = nil
-			if self.humanoid then
-				local animator = self.humanoid:FindFirstChildOfClass("Animator")
-				if animator then
-					local tracks = animator:GetPlayingAnimationTracks()
-					if #tracks > 0 then
-						-- Get the first playing animation
-						local animId = tracks[1].Animation.AnimationId
-						local numId = animId:match("%d+")
-						if numId then
-							currentAnimId = tonumber(numId)
-						end
-					end
-				end
-			end
-			
-			table.insert(self.frames, {
-				cframe = self.root.CFrame,
-				timestamp = elapsed,
-				animId = currentAnimId  -- Store animation per frame
-			})
-		end
-	end)
-	
-	print("🔴 Recording started (with animations per frame)")
-end
-
-function Recorder:stop()
-	if self.conn then self.conn:Disconnect() end
-	
-	-- Collect unique animation IDs
-	local uniqueAnims = {}
-	local animSet = {}
-	for _, frame in ipairs(self.frames) do
-		if frame.animId and not animSet[frame.animId] then
-			table.insert(uniqueAnims, frame.animId)
-			animSet[frame.animId] = true
-		end
-	end
-	
-	print("⏹️ Recording stopped: " .. #self.frames .. " frames, " .. #uniqueAnims .. " unique animations")
-	return {
-		frames = self.frames,
-		hipHeight = self.hipHeight,
-		animationIds = uniqueAnims
-	}
-end
-
--- ================= PLAYBACK =================
-local Playback = {}
-Playback.__index = Playback
-
-function Playback.new(char, recording)
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	local humanoid = char:FindFirstChild("Humanoid")
-	
-	return setmetatable({
-		char = char,
-		root = hrp,
-		humanoid = humanoid,
-		recording = recording,
-		index = 1,
-		startTime = 0,
-		active = false,
-		loop = false,
-		conn = nil,
-		anims = {}
-	}, Playback)
-end
-
-function Playback:start()
-	if not self.recording or not self.recording.frames or #self.recording.frames == 0 then
-		warn("❌ No recording to play")
-		return
-	end
-	
-	self.active = true
-	self.index = 1
-	self.startTime = tick()
-	
-	-- Load all unique animations
-	if self.humanoid and self.recording.animationIds and #self.recording.animationIds > 0 then
-		for _, animId in ipairs(self.recording.animationIds) do
-			local anim = Instance.new("Animation")
-			anim.AnimationId = "rbxassetid://" .. animId
-			self.anims[animId] = self.humanoid:LoadAnimation(anim)
-		end
-		print("✅ Loaded " .. #self.recording.animationIds .. " animations")
-	end
-	
-	-- Disable controls
-	if self.humanoid then
-		self.humanoid.WalkSpeed = 0
-		self.humanoid.AutoRotate = false
-	end
-	
-	local currentPlayingAnim = nil
-	
-	-- Playback loop
-	self.conn = RunService.Heartbeat:Connect(function()
-		if not self.active or not self.root then return end
-		
-		local elapsed = tick() - self.startTime
-		local frames = self.recording.frames
-		
-		-- Find current frame
-		while self.index <= #frames and frames[self.index].timestamp < elapsed do
-			self.index = self.index + 1
-		end
-		
-		-- End of recording
-		if self.index > #frames then
-			if self.loop then
-				self.index = 1
-				self.startTime = tick()
-				print("🔁 Loop restart")
-			else
-				self:stop()
-			end
-			return
-		end
-		
-		-- Apply frame
-		if self.index <= #frames then
-			local frame = frames[self.index]
-			self.root.CFrame = frame.cframe
-			
-			-- Play animation for this frame
-			if frame.animId and self.anims[frame.animId] then
-				if currentPlayingAnim ~= frame.animId then
-					-- Stop previous animation
-					if currentPlayingAnim and self.anims[currentPlayingAnim] then
-						self.anims[currentPlayingAnim]:Stop()
-					end
-					-- Play new animation
-					self.anims[frame.animId]:Play()
-					currentPlayingAnim = frame.animId
-				end
-			end
-		end
-	end)
-	
-	print("▶️ Playback started")
-end
-
-function Playback:stop()
-	self.active = false
-	if self.conn then self.conn:Disconnect() end
-	
-	-- Stop animations
-	for _, anim in pairs(self.anims) do
-		pcall(function() anim:Stop() end)
-	end
-	
-	-- Restore controls
-	if self.humanoid then
-		self.humanoid.WalkSpeed = 16
-		self.humanoid.AutoRotate = true
-	end
-	
-	print("⏹️ Playback stopped")
-end
-
--- ================= SYSTEM =================
-local System = {
-	state = "idle",
-	recorder = nil,
-	playback = nil
+local Config = {
+    ScanDelay = 0.1,
+    AutoScan = true,
+    StealthMode = false,
+    LogResults = true,
+    Theme = {
+        Primary = Color3.fromRGB(138, 43, 226),
+        Secondary = Color3.fromRGB(75, 0, 130),
+        Success = Color3.fromRGB(46, 204, 113),
+        Warning = Color3.fromRGB(241, 196, 15),
+        Danger = Color3.fromRGB(231, 76, 60),
+        Background = Color3.fromRGB(23, 23, 23),
+        Text = Color3.fromRGB(255, 255, 255)
+    }
 }
 
-function System:startRecording()
-	self:stop()
-	self.recorder = Recorder.new(Player.Character)
-	self.recorder:start()
-	self.state = "recording"
+-- =====================================================================================
+-- SCANNER ENGINE
+-- =====================================================================================
+
+local Scanner = {
+    Results = {
+        RemoteEvents = {},
+        RemoteFunctions = {},
+        Objects = {},
+        GUIs = {},
+        Vulnerabilities = {}
+    },
+    Stats = {
+        TotalScanned = 0,
+        HighRisk = 0,
+        MediumRisk = 0,
+        LowRisk = 0
+    }
+}
+
+function Scanner:ScanRemoteEvents()
+    local remotes = {}
+    
+    local function scanContainer(container, path)
+        for _, obj in pairs(container:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local risk = self:AnalyzeRemote(obj)
+                table.insert(remotes, {
+                    Object = obj,
+                    Path = path .. "." .. obj:GetFullName(),
+                    Type = obj.ClassName,
+                    Risk = risk,
+                    Name = obj.Name
+                })
+                self.Stats.TotalScanned = self.Stats.TotalScanned + 1
+                
+                if risk == "High" then
+                    self.Stats.HighRisk = self.Stats.HighRisk + 1
+                elseif risk == "Medium" then
+                    self.Stats.MediumRisk = self.Stats.MediumRisk + 1
+                else
+                    self.Stats.LowRisk = self.Stats.LowRisk + 1
+                end
+            end
+        end
+    end
+    
+    scanContainer(ReplicatedStorage, "ReplicatedStorage")
+    scanContainer(Workspace, "Workspace")
+    
+    self.Results.RemoteEvents = remotes
+    return remotes
 end
 
-function System:stopRecording()
-	if not self.recorder then return nil end
-	local data = self.recorder:stop()
-	self.recorder = nil
-	self.state = "idle"
-	return data
+function Scanner:AnalyzeRemote(remote)
+    local name = remote.Name:lower()
+    
+    -- High risk keywords
+    local highRisk = {"donation", "tip", "admin", "mod", "owner", "purchase", "buy", "vip", "gamepass", "money", "cash", "coin"}
+    for _, keyword in pairs(highRisk) do
+        if name:find(keyword) then
+            return "High"
+        end
+    end
+    
+    -- Medium risk keywords
+    local mediumRisk = {"chat", "message", "teleport", "tp", "spawn", "give", "award", "unlock"}
+    for _, keyword in pairs(mediumRisk) do
+        if name:find(keyword) then
+            return "Medium"
+        end
+    end
+    
+    return "Low"
 end
 
-function System:startPlayback(recording, loop)
-	self:stop()
-	self.playback = Playback.new(Player.Character, recording)
-	self.playback.loop = loop or false
-	self.playback:start()
-	self.state = "playing"
+function Scanner:ScanObjects()
+    local objects = {}
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local movable = false
+            
+            if obj:IsA("BasePart") then
+                movable = not obj.Anchored
+            elseif obj:IsA("Model") then
+                local primaryPart = obj.PrimaryPart
+                if primaryPart then
+                    movable = not primaryPart.Anchored
+                end
+            end
+            
+            if movable then
+                local name = obj.Name:lower()
+                local risk = "Low"
+                
+                if name:find("stair") or name:find("ladder") or name:find("door") or name:find("platform") then
+                    risk = "Medium"
+                end
+                
+                table.insert(objects, {
+                    Object = obj,
+                    Name = obj.Name,
+                    Type = obj.ClassName,
+                    Risk = risk,
+                    Movable = movable
+                })
+            end
+        end
+    end
+    
+    self.Results.Objects = objects
+    return objects
 end
 
-function System:stop()
-	if self.recorder then
-		self.recorder:stop()
-		self.recorder = nil
-	end
-	if self.playback then
-		self.playback:stop()
-		self.playback = nil
-	end
-	self.state = "idle"
+function Scanner:ScanGUIs()
+    local guis = {}
+    
+    for _, gui in pairs(PlayerGui:GetDescendants()) do
+        if gui:IsA("ScreenGui") or gui:IsA("Frame") or gui:IsA("TextButton") then
+            local name = gui.Name:lower()
+            local risk = "Low"
+            
+            if name:find("shop") or name:find("admin") or name:find("vip") or name:find("gamepass") then
+                risk = "High"
+            elseif name:find("menu") or name:find("setting") then
+                risk = "Medium"
+            end
+            
+            table.insert(guis, {
+                Object = gui,
+                Name = gui.Name,
+                Type = gui.ClassName,
+                Risk = risk
+            })
+        end
+    end
+    
+    self.Results.GUIs = guis
+    return guis
 end
 
--- ================= UI =================
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AutoWalkSimple"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
--- Wait for PlayerGui to be ready
-repeat task.wait() until PlayerGui
-screenGui.Parent = PlayerGui
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 250, 0, 350)
-mainFrame.Position = UDim2.new(0, 20, 0, 100)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BackgroundTransparency = 0.1
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.ZIndex = 10
-mainFrame.Parent = screenGui
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
-
-local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 35)
-title.BackgroundTransparency = 1
-title.Text = "Auto Walk"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 16
-
--- Status
-local status = Instance.new("TextLabel", mainFrame)
-status.Size = UDim2.new(1, -20, 0, 25)
-status.Position = UDim2.new(0, 10, 0, 40)
-status.BackgroundTransparency = 1
-status.Text = "Status: Idle"
-status.TextColor3 = Color3.fromRGB(200, 200, 200)
-status.Font = Enum.Font.Gotham
-status.TextSize = 12
-
--- Record button
-local recordBtn = Instance.new("TextButton", mainFrame)
-recordBtn.Size = UDim2.new(0, 110, 0, 35)
-recordBtn.Position = UDim2.new(0, 10, 0, 70)
-recordBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-recordBtn.Text = "🔴 Record"
-recordBtn.TextColor3 = Color3.new(1, 1, 1)
-recordBtn.Font = Enum.Font.GothamBold
-recordBtn.TextSize = 13
-Instance.new("UICorner", recordBtn).CornerRadius = UDim.new(0, 8)
-
--- Stop button
-local stopBtn = Instance.new("TextButton", mainFrame)
-stopBtn.Size = UDim2.new(0, 110, 0, 35)
-stopBtn.Position = UDim2.new(0, 130, 0, 70)
-stopBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-stopBtn.Text = "⏹️ Stop"
-stopBtn.TextColor3 = Color3.new(1, 1, 1)
-stopBtn.Font = Enum.Font.GothamBold
-stopBtn.TextSize = 13
-Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 8)
-
--- Save button
-local saveBtn = Instance.new("TextButton", mainFrame)
-saveBtn.Size = UDim2.new(1, -20, 0, 35)
-saveBtn.Position = UDim2.new(0, 10, 0, 115)
-saveBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-saveBtn.Text = "💾 Save"
-saveBtn.TextColor3 = Color3.new(1, 1, 1)
-saveBtn.Font = Enum.Font.GothamBold
-saveBtn.TextSize = 13
-Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 8)
-
--- Recordings list
-local listLabel = Instance.new("TextLabel", mainFrame)
-listLabel.Size = UDim2.new(1, -20, 0, 20)
-listLabel.Position = UDim2.new(0, 10, 0, 160)
-listLabel.BackgroundTransparency = 1
-listLabel.Text = "Recordings:"
-listLabel.TextColor3 = Color3.new(1, 1, 1)
-listLabel.Font = Enum.Font.GothamBold
-listLabel.TextSize = 11
-listLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local listScroll = Instance.new("ScrollingFrame", mainFrame)
-listScroll.Size = UDim2.new(1, -20, 0, 160)
-listScroll.Position = UDim2.new(0, 10, 0, 180)
-listScroll.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-listScroll.BorderSizePixel = 0
-listScroll.ScrollBarThickness = 4
-Instance.new("UICorner", listScroll).CornerRadius = UDim.new(0, 8)
-
-local listLayout = Instance.new("UIListLayout", listScroll)
-listLayout.Padding = UDim.new(0, 5)
-
--- ================= LOGIC =================
-local currentRecording = nil
-
-local function updateStatus()
-	if System.state == "recording" then
-		status.Text = "Status: 🔴 Recording..."
-		status.TextColor3 = Color3.fromRGB(220, 50, 50)
-	elseif System.state == "playing" then
-		status.Text = "Status: ▶️ Playing..."
-		status.TextColor3 = Color3.fromRGB(50, 150, 50)
-	else
-		status.Text = "Status: Idle"
-		status.TextColor3 = Color3.fromRGB(200, 200, 200)
-	end
+function Scanner:FullScan()
+    print("[CHAOS SCANNER] Starting full scan...")
+    self:ScanRemoteEvents()
+    self:ScanObjects()
+    self:ScanGUIs()
+    print("[CHAOS SCANNER] Scan complete!")
+    return self.Results
 end
 
-local function refreshList()
-	for _, child in ipairs(listScroll:GetChildren()) do
-		if child:IsA("Frame") then child:Destroy() end
-	end
-	
-	for i, rec in ipairs(recordings) do
-		local item = Instance.new("Frame", listScroll)
-		item.Size = UDim2.new(1, -10, 0, 35)
-		item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-		item.BorderSizePixel = 0
-		Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
-		
-		local label = Instance.new("TextLabel", item)
-		label.Size = UDim2.new(1, -105, 1, 0)
-		label.Position = UDim2.new(0, 5, 0, 0)
-		label.BackgroundTransparency = 1
-		label.Text = rec.name
-		label.TextColor3 = Color3.new(1, 1, 1)
-		label.Font = Enum.Font.Gotham
-		label.TextSize = 11
-		label.TextXAlignment = Enum.TextXAlignment.Left
-		
-		local playBtn = Instance.new("TextButton", item)
-		playBtn.Size = UDim2.new(0, 30, 0, 25)
-		playBtn.Position = UDim2.new(1, -95, 0.5, -12.5)
-		playBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-		playBtn.Text = "▶"
-		playBtn.TextColor3 = Color3.new(1, 1, 1)
-		playBtn.Font = Enum.Font.GothamBold
-		playBtn.TextSize = 12
-		Instance.new("UICorner", playBtn).CornerRadius = UDim.new(0, 4)
-		
-		local loopBtn = Instance.new("TextButton", item)
-		loopBtn.Size = UDim2.new(0, 30, 0, 25)
-		loopBtn.Position = UDim2.new(1, -60, 0.5, -12.5)
-		loopBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 200)
-		loopBtn.Text = "🔁"
-		loopBtn.TextColor3 = Color3.new(1, 1, 1)
-		loopBtn.Font = Enum.Font.GothamBold
-		loopBtn.TextSize = 12
-		Instance.new("UICorner", loopBtn).CornerRadius = UDim.new(0, 4)
-		
-		local delBtn = Instance.new("TextButton", item)
-		delBtn.Size = UDim2.new(0, 30, 0, 25)
-		delBtn.Position = UDim2.new(1, -25, 0.5, -12.5)
-		delBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-		delBtn.Text = "🗑"
-		delBtn.TextColor3 = Color3.new(1, 1, 1)
-		delBtn.Font = Enum.Font.GothamBold
-		delBtn.TextSize = 12
-		Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
-		
-		playBtn.MouseButton1Click:Connect(function()
-			System:startPlayback(rec, false)
-			updateStatus()
-		end)
-		
-		loopBtn.MouseButton1Click:Connect(function()
-			System:startPlayback(rec, true)
-			updateStatus()
-		end)
-		
-		delBtn.MouseButton1Click:Connect(function()
-			table.remove(recordings, i)
-			print("🗑️ Deleted: " .. rec.name)
-			refreshList()
-		end)
-	end
-	
-	listScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
+-- =====================================================================================
+-- EXECUTOR ENGINE
+-- =====================================================================================
+
+local Executor = {
+    Active = {},
+    Logs = {}
+}
+
+function Executor:FireRemote(remote, ...)
+    local success, err = pcall(function()
+        if remote.Type == "RemoteEvent" then
+            remote.Object:FireServer(...)
+        elseif remote.Type == "RemoteFunction" then
+            remote.Object:InvokeServer(...)
+        end
+    end)
+    
+    local log = {
+        Time = os.date("%H:%M:%S"),
+        Remote = remote.Name,
+        Success = success,
+        Error = err
+    }
+    table.insert(self.Logs, log)
+    
+    return success
 end
 
--- Button events
-recordBtn.MouseButton1Click:Connect(function()
-	System:startRecording()
-	updateStatus()
-end)
+function Executor:FakeDonation(remote, amount, message)
+    local variants = {
+        {amount = amount or 999999, from = Player.Name, message = message or "HACKED LOL"},
+        {Amount = amount or 999999, From = Player.Name, Message = message or "HACKED LOL"},
+        {value = amount or 999999, player = Player.Name, text = message or "HACKED LOL"},
+        {Value = amount or 999999, Player = Player.Name, Text = message or "HACKED LOL"}
+    }
+    
+    for _, data in pairs(variants) do
+        self:FireRemote(remote, data)
+        task.wait(0.1)
+    end
+end
 
-stopBtn.MouseButton1Click:Connect(function()
-	if System.state == "recording" then
-		currentRecording = System:stopRecording()
-		if currentRecording and currentRecording.frames then
-			print("✅ Recording ready: " .. #currentRecording.frames .. " frames")
-			status.Text = "✅ Ready to save (" .. #currentRecording.frames .. " frames)"
-			status.TextColor3 = Color3.fromRGB(50, 200, 50)
-		else
-			warn("❌ Recording failed")
-			status.Text = "❌ Recording failed"
-			status.TextColor3 = Color3.fromRGB(255, 50, 50)
-		end
-	else
-		System:stop()
-		updateStatus()
-	end
-end)
+function Executor:SpamChat(remote, message, count)
+    for i = 1, count or 10 do
+        self:FireRemote(remote, message or "CHAOS SCRIPT ACTIVE")
+        task.wait(0.1)
+    end
+end
 
-saveBtn.MouseButton1Click:Connect(function()
-	if not currentRecording then
-		warn("⚠️ No recording to save. Press Record first!")
-		status.Text = "⚠️ Record first!"
-		status.TextColor3 = Color3.fromRGB(255, 150, 0)
-		task.wait(2)
-		updateStatus()
-		return
-	end
-	
-	if not currentRecording.frames or #currentRecording.frames == 0 then
-		warn("⚠️ Recording is empty!")
-		status.Text = "⚠️ Empty recording!"
-		status.TextColor3 = Color3.fromRGB(255, 150, 0)
-		task.wait(2)
-		updateStatus()
-		return
-	end
-	
-	local name = "rec_" .. os.date("%H%M%S")
-	currentRecording.name = name
-	table.insert(recordings, currentRecording)
-	saveRecordings()
-	refreshList()
-	currentRecording = nil
-	status.Text = "✅ Saved: " .. name
-	status.TextColor3 = Color3.fromRGB(50, 200, 50)
-	task.wait(2)
-	updateStatus()
-	print("✅ Saved: " .. name)
-end)
+function Executor:MoveObject(object, position)
+    local success = pcall(function()
+        if object:IsA("BasePart") then
+            object.CFrame = CFrame.new(position or Vector3.new(0, 1000, 0))
+        elseif object:IsA("Model") and object.PrimaryPart then
+            object:SetPrimaryPartCFrame(CFrame.new(position or Vector3.new(0, 1000, 0)))
+        end
+    end)
+    return success
+end
 
--- ================= STARTUP =================
-print("=== AUTO WALK RECORDER (SIMPLE) ===")
-print("✅ Recording with animations")
-print("✅ Playback with loop")
-print("✅ UI Created")
-print("====================================")
+function Executor:TeleportAllPlayers(position)
+    for _, remote in pairs(Scanner.Results.RemoteEvents) do
+        if remote.Name:lower():find("teleport") or remote.Name:lower():find("tp") then
+            for _, player in pairs(Players:GetPlayers()) do
+                self:FireRemote(remote, player, position or Vector3.new(0, 100, 0))
+            end
+        end
+    end
+end
 
--- Wait a bit before loading
-task.wait(0.5)
-loadRecordings()
-refreshList()
-updateStatus()
+function Executor:ChaosMode()
+    -- Spam all high risk remotes
+    for _, remote in pairs(Scanner.Results.RemoteEvents) do
+        if remote.Risk == "High" then
+            spawn(function()
+                for i = 1, 5 do
+                    self:FireRemote(remote, {chaos = true, value = 999999})
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end
+    
+    -- Move random objects
+    for _, obj in pairs(Scanner.Results.Objects) do
+        if obj.Movable then
+            spawn(function()
+                self:MoveObject(obj.Object, Vector3.new(math.random(-500, 500), 1000, math.random(-500, 500)))
+            end)
+        end
+    end
+end
 
-print("✅ System ready!")
+-- =====================================================================================
+-- UI SYSTEM
+-- =====================================================================================
+
+local UI = {}
+
+function UI:Create()
+    -- Main ScreenGui
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "ChaosScanner"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    if gethui then
+        ScreenGui.Parent = gethui()
+    elseif syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+        ScreenGui.Parent = CoreGui
+    else
+        ScreenGui.Parent = CoreGui
+    end
+    
+    -- Main Frame
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 600, 0, 450)
+    MainFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+    MainFrame.BackgroundColor3 = Config.Theme.Background
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = ScreenGui
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.Parent = MainFrame
+    
+    -- Header
+    local Header = Instance.new("Frame")
+    Header.Name = "Header"
+    Header.Size = UDim2.new(1, 0, 0, 60)
+    Header.BackgroundColor3 = Config.Theme.Primary
+    Header.BorderSizePixel = 0
+    Header.Parent = MainFrame
+    
+    local HeaderCorner = Instance.new("UICorner")
+    HeaderCorner.CornerRadius = UDim.new(0, 12)
+    HeaderCorner.Parent = Header
+    
+    -- Logo
+    local Logo = Instance.new("ImageLabel")
+    Logo.Name = "Logo"
+    Logo.Size = UDim2.new(0, 40, 0, 40)
+    Logo.Position = UDim2.new(0, 10, 0.5, -20)
+    Logo.BackgroundTransparency = 1
+    Logo.Image = "rbxassetid://7733779610" -- Chaos icon
+    Logo.Parent = Header
+    
+    -- Title
+    local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
+    Title.Size = UDim2.new(0, 200, 1, 0)
+    Title.Position = UDim2.new(0, 60, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "CHAOS SCANNER"
+    Title.TextColor3 = Config.Theme.Text
+    Title.TextSize = 20
+    Title.Font = Enum.Font.GothamBold
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Parent = Header
+    
+    -- Version
+    local Version = Instance.new("TextLabel")
+    Version.Name = "Version"
+    Version.Size = UDim2.new(0, 100, 0, 20)
+    Version.Position = UDim2.new(0, 60, 0, 30)
+    Version.BackgroundTransparency = 1
+    Version.Text = "v1.0 | Private"
+    Version.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Version.TextSize = 12
+    Version.Font = Enum.Font.Gotham
+    Version.TextXAlignment = Enum.TextXAlignment.Left
+    Version.Parent = Header
+    
+    -- Close Button
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Name = "CloseBtn"
+    CloseBtn.Size = UDim2.new(0, 40, 0, 40)
+    CloseBtn.Position = UDim2.new(1, -50, 0.5, -20)
+    CloseBtn.BackgroundColor3 = Config.Theme.Danger
+    CloseBtn.Text = "✕"
+    CloseBtn.TextColor3 = Config.Theme.Text
+    CloseBtn.TextSize = 20
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.Parent = Header
+    
+    local CloseBtnCorner = Instance.new("UICorner")
+    CloseBtnCorner.CornerRadius = UDim.new(0, 8)
+    CloseBtnCorner.Parent = CloseBtn
+    
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+    end)
+    
+    -- Stats Frame
+    local StatsFrame = Instance.new("Frame")
+    StatsFrame.Name = "StatsFrame"
+    StatsFrame.Size = UDim2.new(1, -20, 0, 80)
+    StatsFrame.Position = UDim2.new(0, 10, 0, 70)
+    StatsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    StatsFrame.BorderSizePixel = 0
+    StatsFrame.Parent = MainFrame
+    
+    local StatsCorner = Instance.new("UICorner")
+    StatsCorner.CornerRadius = UDim.new(0, 8)
+    StatsCorner.Parent = StatsFrame
+    
+    -- Stats Labels
+    local function createStat(name, color, position)
+        local StatLabel = Instance.new("TextLabel")
+        StatLabel.Name = name
+        StatLabel.Size = UDim2.new(0.25, -10, 1, 0)
+        StatLabel.Position = position
+        StatLabel.BackgroundTransparency = 1
+        StatLabel.Text = "0"
+        StatLabel.TextColor3 = color
+        StatLabel.TextSize = 24
+        StatLabel.Font = Enum.Font.GothamBold
+        StatLabel.Parent = StatsFrame
+        
+        local StatName = Instance.new("TextLabel")
+        StatName.Size = UDim2.new(1, 0, 0, 20)
+        StatName.Position = UDim2.new(0, 0, 1, -25)
+        StatName.BackgroundTransparency = 1
+        StatName.Text = name
+        StatName.TextColor3 = Color3.fromRGB(150, 150, 150)
+        StatName.TextSize = 12
+        StatName.Font = Enum.Font.Gotham
+        StatName.Parent = StatLabel
+        
+        return StatLabel
+    end
+    
+    local TotalStat = createStat("TOTAL", Config.Theme.Text, UDim2.new(0, 5, 0, 10))
+    local HighStat = createStat("HIGH", Config.Theme.Danger, UDim2.new(0.25, 5, 0, 10))
+    local MediumStat = createStat("MEDIUM", Config.Theme.Warning, UDim2.new(0.5, 5, 0, 10))
+    local LowStat = createStat("LOW", Config.Theme.Success, UDim2.new(0.75, 5, 0, 10))
+    
+    -- Tabs Frame
+    local TabsFrame = Instance.new("Frame")
+    TabsFrame.Name = "TabsFrame"
+    TabsFrame.Size = UDim2.new(1, -20, 0, 40)
+    TabsFrame.Position = UDim2.new(0, 10, 0, 160)
+    TabsFrame.BackgroundTransparency = 1
+    TabsFrame.Parent = MainFrame
+    
+    -- Content Frame
+    local ContentFrame = Instance.new("ScrollingFrame")
+    ContentFrame.Name = "ContentFrame"
+    ContentFrame.Size = UDim2.new(1, -20, 0, 180)
+    ContentFrame.Position = UDim2.new(0, 10, 0, 210)
+    ContentFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    ContentFrame.BorderSizePixel = 0
+    ContentFrame.ScrollBarThickness = 6
+    ContentFrame.Parent = MainFrame
+    
+    local ContentCorner = Instance.new("UICorner")
+    ContentCorner.CornerRadius = UDim.new(0, 8)
+    ContentCorner.Parent = ContentFrame
+    
+    local ContentList = Instance.new("UIListLayout")
+    ContentList.Padding = UDim.new(0, 5)
+    ContentList.Parent = ContentFrame
+    
+    -- Action Buttons
+    local ButtonsFrame = Instance.new("Frame")
+    ButtonsFrame.Name = "ButtonsFrame"
+    ButtonsFrame.Size = UDim2.new(1, -20, 0, 40)
+    ButtonsFrame.Position = UDim2.new(0, 10, 1, -50)
+    ButtonsFrame.BackgroundTransparency = 1
+    ButtonsFrame.Parent = MainFrame
+    
+    local function createButton(text, color, position, callback)
+        local Button = Instance.new("TextButton")
+        Button.Size = UDim2.new(0.32, -5, 1, 0)
+        Button.Position = position
+        Button.BackgroundColor3 = color
+        Button.Text = text
+        Button.TextColor3 = Config.Theme.Text
+        Button.TextSize = 14
+        Button.Font = Enum.Font.GothamBold
+        Button.Parent = ButtonsFrame
+        
+        local BtnCorner = Instance.new("UICorner")
+        BtnCorner.CornerRadius = UDim.new(0, 8)
+        BtnCorner.Parent = Button
+        
+        Button.MouseButton1Click:Connect(callback)
+        
+        return Button
+    end
+    
+    local ScanBtn = createButton("🔍 SCAN", Config.Theme.Primary, UDim2.new(0, 0, 0, 0), function()
+        ContentFrame:ClearAllChildren()
+        ContentList.Parent = ContentFrame
+        
+        Scanner:FullScan()
+        
+        TotalStat.Text = tostring(Scanner.Stats.TotalScanned)
+        HighStat.Text = tostring(Scanner.Stats.HighRisk)
+        MediumStat.Text = tostring(Scanner.Stats.MediumRisk)
+        LowStat.Text = tostring(Scanner.Stats.LowRisk)
+        
+        UI:DisplayResults(ContentFrame)
+    end)
+    
+    local ExploitBtn = createButton("⚡ EXPLOIT ALL", Config.Theme.Warning, UDim2.new(0.34, 0, 0, 0), function()
+        for _, remote in pairs(Scanner.Results.RemoteEvents) do
+            if remote.Risk == "High" then
+                Executor:FireRemote(remote, {chaos = true, value = 999999})
+            end
+        end
+    end)
+    
+    local ChaosBtn = createButton("💥 CHAOS MODE", Config.Theme.Danger, UDim2.new(0.68, 0, 0, 0), function()
+        Executor:ChaosMode()
+    end)
+    
+    -- Make draggable
+    local dragging, dragInput, dragStart, startPos
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    Header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    Header.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+    
+    return ScreenGui
+end
+
+function UI:DisplayResults(container)
+    for _, remote in pairs(Scanner.Results.RemoteEvents) do
+        local Item = Instance.new("Frame")
+        Item.Size = UDim2.new(1, -10, 0, 60)
+        Item.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        Item.BorderSizePixel = 0
+        Item.Parent = container
+        
+        local ItemCorner = Instance.new("UICorner")
+        ItemCorner.CornerRadius = UDim.new(0, 6)
+        ItemCorner.Parent = Item
+        
+        local RiskIndicator = Instance.new("Frame")
+        RiskIndicator.Size = UDim2.new(0, 5, 1, 0)
+        RiskIndicator.BackgroundColor3 = remote.Risk == "High" and Config.Theme.Danger or (remote.Risk == "Medium" and Config.Theme.Warning or Config.Theme.Success)
+        RiskIndicator.BorderSizePixel = 0
+        RiskIndicator.Parent = Item
+        
+        local RiskCorner = Instance.new("UICorner")
+        RiskCorner.CornerRadius = UDim.new(0, 6)
+        RiskCorner.Parent = RiskIndicator
+        
+        local NameLabel = Instance.new("TextLabel")
+        NameLabel.Size = UDim2.new(0.6, -15, 0, 20)
+        NameLabel.Position = UDim2.new(0, 15, 0, 5)
+        NameLabel.BackgroundTransparency = 1
+        NameLabel.Text = remote.Name
+        NameLabel.TextColor3 = Config.Theme.Text
+        NameLabel.TextSize = 14
+        NameLabel.Font = Enum.Font.GothamBold
+        NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        NameLabel.Parent = Item
+        
+        local TypeLabel = Instance.new("TextLabel")
+        TypeLabel.Size = UDim2.new(0.6, -15, 0, 15)
+        TypeLabel.Position = UDim2.new(0, 15, 0, 25)
+        TypeLabel.BackgroundTransparency = 1
+        TypeLabel.Text = remote.Type .. " | " .. remote.Risk .. " Risk"
+        TypeLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        TypeLabel.TextSize = 11
+        TypeLabel.Font = Enum.Font.Gotham
+        TypeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TypeLabel.Parent = Item
+        
+        local PathLabel = Instance.new("TextLabel")
+        PathLabel.Size = UDim2.new(0.6, -15, 0, 15)
+        PathLabel.Position = UDim2.new(0, 15, 0, 40)
+        PathLabel.BackgroundTransparency = 1
+        PathLabel.Text = remote.Path:sub(1, 50) .. (remote.Path:len() > 50 and "..." or "")
+        PathLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
+        PathLabel.TextSize = 9
+        PathLabel.Font = Enum.Font.Gotham
+        PathLabel.TextXAlignment = Enum.TextXAlignment.Left
+        PathLabel.Parent = Item
+        
+        local ExecBtn = Instance.new("TextButton")
+        ExecBtn.Size = UDim2.new(0, 80, 0, 25)
+        ExecBtn.Position = UDim2.new(1, -90, 0.5, -12)
+        ExecBtn.BackgroundColor3 = Config.Theme.Primary
+        ExecBtn.Text = "EXECUTE"
+        ExecBtn.TextColor3 = Config.Theme.Text
+        ExecBtn.TextSize = 11
+        ExecBtn.Font = Enum.Font.GothamBold
+        ExecBtn.Parent = Item
+        
+        local ExecCorner = Instance.new("UICorner")
+        ExecCorner.CornerRadius = UDim.new(0, 6)
+        ExecCorner.Parent = ExecBtn
+        
+        ExecBtn.MouseButton1Click:Connect(function()
+            if remote.Name:lower():find("donation") or remote.Name:lower():find("tip") then
+                Executor:FakeDonation(remote, 999999, "CHAOS ACTIVE")
+            elseif remote.Name:lower():find("chat") then
+                Executor:SpamChat(remote, "CHAOS SCANNER", 5)
+            else
+                Executor:FireRemote(remote, {chaos = true, value = 999999})
+            end
+            
+            ExecBtn.Text = "✓ DONE"
+            ExecBtn.BackgroundColor3 = Config.Theme.Success
+            task.wait(1)
+            ExecBtn.Text = "EXECUTE"
+            ExecBtn.BackgroundColor3 = Config.Theme.Primary
+        end)
+    end
+    
+    container.CanvasSize = UDim2.new(0, 0, 0, container.UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+-- =====================================================================================
+-- INITIALIZATION
+-- =====================================================================================
+
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("  ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗    ███████╗ ██████╗ █████╗ ███╗   ██╗")
+print(" ██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝    ██╔════╝██╔════╝██╔══██╗████╗  ██║")
+print(" ██║     ███████║███████║██║   ██║███████╗    ███████╗██║     ███████║██╔██╗ ██║")
+print(" ██║     ██╔══██║██╔══██║██║   ██║╚════██║    ╚════██║██║     ██╔══██║██║╚██╗██║")
+print(" ╚██████╗██║  ██║██║  ██║╚██████╔╝███████║    ███████║╚██████╗██║  ██║██║ ╚████║")
+print("  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝    ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("[CHAOS SCANNER] Version 1.0 - Private Edition")
+print("[CHAOS SCANNER] Advanced Remote Scanner & Executor")
+print("[CHAOS SCANNER] For Private Server Use Only")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+-- Create UI
+local MainUI = UI:Create()
+
+-- Auto scan on load
+if Config.AutoScan then
+    task.wait(1)
+    print("[CHAOS SCANNER] Starting auto scan...")
+    Scanner:FullScan()
+    print("[CHAOS SCANNER] Found " .. Scanner.Stats.TotalScanned .. " remotes")
+    print("[CHAOS SCANNER] High Risk: " .. Scanner.Stats.HighRisk)
+    print("[CHAOS SCANNER] Medium Risk: " .. Scanner.Stats.MediumRisk)
+    print("[CHAOS SCANNER] Low Risk: " .. Scanner.Stats.LowRisk)
+end
+
+print("[CHAOS SCANNER] Ready! Press SCAN button to start.")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
