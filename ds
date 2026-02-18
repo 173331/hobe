@@ -1,3 +1,5 @@
 print("Test 1")
 local Player = game.Players.LocalPlayer
 print("Test 2")
+local PlayerGui = Player:WaitForChild("PlayerGui")
+print("Test 3")
