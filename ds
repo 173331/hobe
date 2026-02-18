@@ -11,13 +11,13 @@ local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+
+-- ================= KONFIGURASI =================
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
-print("[CHAOS] Loading...")
-
--- ================= CONFIG =================
+-- ================= VARIABEL =================
 local Config = {
     ScanDelay = 0.1,
     AutoScan = true,
@@ -32,12 +32,16 @@ local Config = {
     }
 }
 
--- ================= SCANNER =================
 local Scanner = {
     Results = {RemoteEvents = {}, Objects = {}, GUIs = {}},
     Stats = {TotalScanned = 0, HighRisk = 0, MediumRisk = 0, LowRisk = 0}
 }
 
+local Executor = {Active = {}, Logs = {}}
+
+local UI = {}
+
+-- ================= SCANNER FUNCTIONS =================
 function Scanner:ScanRemoteEvents()
     local remotes = {}
     
@@ -119,16 +123,12 @@ function Scanner:ScanObjects()
 end
 
 function Scanner:FullScan()
-    print("[CHAOS] Scanning...")
     self:ScanRemoteEvents()
     self:ScanObjects()
-    print("[CHAOS] Scan complete!")
     return self.Results
 end
 
--- ================= EXECUTOR =================
-local Executor = {Active = {}, Logs = {}}
-
+-- ================= EXECUTOR FUNCTIONS =================
 function Executor:FireRemote(remote, ...)
     local success = pcall(function()
         if remote.Type == "RemoteEvent" then
@@ -192,7 +192,6 @@ function Executor:ChaosMode()
 end
 
 function Executor:MemoryBomb()
-    print("[MEMORY BOMB] Spawning 5000 objects...")
     for i = 1, 5000 do
         spawn(function()
             pcall(function()
@@ -210,7 +209,6 @@ function Executor:MemoryBomb()
 end
 
 function Executor:InfiniteSpam()
-    print("[INFINITE SPAM] Starting...")
     for i = 1, 100 do
         spawn(function()
             while true do
@@ -226,8 +224,6 @@ function Executor:InfiniteSpam()
 end
 
 function Executor:ApocalypseMode()
-    print("[APOCALYPSE] Starting...")
-    
     for i = 1, 50 do
         spawn(function()
             while wait(0.01) do
@@ -254,9 +250,7 @@ function Executor:ApocalypseMode()
     end)
 end
 
--- ================= UI =================
-local UI = {}
-
+-- ================= UI FUNCTIONS =================
 function UI:Create()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "ChaosScanner"
@@ -506,20 +500,10 @@ function UI:DisplayResults(container)
     container.CanvasSize = UDim2.new(0, 0, 0, ContentList.AbsoluteContentSize.Y + 10)
 end
 
--- ================= INIT =================
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("  CHAOS SCANNER V1.1")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
+-- ================= INITIALIZATION =================
 local MainUI = UI:Create()
 
 if Config.AutoScan then
     wait(1)
-    print("[CHAOS] Auto scanning...")
     Scanner:FullScan()
-    print("[CHAOS] Found " .. Scanner.Stats.TotalScanned .. " remotes")
-    print("[CHAOS] High: " .. Scanner.Stats.HighRisk .. " | Medium: " .. Scanner.Stats.MediumRisk .. " | Low: " .. Scanner.Stats.LowRisk)
 end
-
-print("[CHAOS] Ready! Click SCAN button.")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
